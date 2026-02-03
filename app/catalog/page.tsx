@@ -1,0 +1,595 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { supabase } from "../lib/supabase";
+import { getCountryFlag } from "../lib/countryFlags";
+import { getFavoritedProductIds } from "../lib/favorites";
+import FavoriteButton from "../components/FavoriteButton";
+import QuickAddButton from "../components/QuickAddButton";
+
+interface Product {
+  id: string;
+  name: string;
+  slug: string;
+  price: number;
+  currency: string;
+  category: string | null;
+  created_at?: string;
+  brand?: {
+    name: string;
+    slug: string;
+    logo_url: string | null;
+    country: string | null;
+  };
+  product_images: Array<{
+    image_url: string;
+    is_main: boolean;
+    display_order: number;
+  }>;
+  product_sizes: Array<{
+    size: string;
+    in_stock: boolean;
+  }>;
+}
+
+function ProductCard({ product, isNew, isFavorited = false }: { product: Product; isNew: boolean; isFavorited?: boolean }) {
+  const allImages = (product.product_images || [])
+    .sort((a, b) => a.display_order - b.display_order)
+    .map(img => img.image_url);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  const mainImage = allImages[0] || "";
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (allImages.length <= 1) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const width = rect.width;
+    const segmentWidth = width / allImages.length;
+    const newIndex = Math.min(Math.floor(x / segmentWidth), allImages.length - 1);
+    setCurrentImageIndex(newIndex);
+  };
+
+  return (
+    <div>
+      <div
+        style={{ position: "relative", marginBottom: 10 }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setCurrentImageIndex(0)}
+      >
+        <Link
+          href={`/product/${product.slug || product.id}`}
+          style={{ textDecoration: "none", color: "black" }}
+        >
+          {allImages.length > 0 ? (
+            <img
+              src={allImages[currentImageIndex]}
+              alt={product.name}
+              style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", display: "block", userSelect: "none" }}
+              draggable={false}
+            />
+          ) : (
+            <div style={{ width: "100%", aspectRatio: "3/4", background: "#f5f5f5" }} />
+          )}
+        </Link>
+
+        {/* NEW Badge */}
+        {isNew && (
+          <div style={{
+            position: "absolute",
+            top: 8,
+            left: 8,
+            background: "#F5F5F5",
+            color: "#999",
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: 0.5,
+            padding: "4px 8px",
+            textTransform: "uppercase"
+          }}>
+            NEW
+          </div>
+        )}
+
+        {/* Image indicators */}
+        {allImages.length > 1 && (
+          <div
+            style={{
+              position: "absolute",
+              bottom: 8,
+              left: "50%",
+              transform: "translateX(-50%)",
+              display: "flex",
+              gap: 4,
+              pointerEvents: "none",
+            }}
+          >
+            {allImages.map((_, idx) => (
+              <div
+                key={idx}
+                style={{
+                  width: 4,
+                  height: 4,
+                  background: currentImageIndex === idx ? "#000" : "rgba(255,255,255,0.6)",
+                  border: currentImageIndex === idx ? "none" : "1px solid rgba(0,0,0,0.15)",
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Brand Name */}
+      {product.brand && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          marginBottom: 4
+        }}>
+          <div style={{
+            fontSize: 11,
+            color: "#000",
+            letterSpacing: 0.5,
+            textTransform: "uppercase",
+            fontWeight: 700
+          }}>
+            {product.brand.name}
+          </div>
+          {product.brand.country && (
+            <span style={{
+              fontSize: 16,
+              lineHeight: 1
+            }}>
+              {getCountryFlag(product.brand.country)}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Product Name */}
+      <Link
+        href={`/product/${product.slug || product.id}`}
+        style={{ textDecoration: "none", color: "black" }}
+      >
+        <div style={{
+          fontSize: 10,
+          fontWeight: 400,
+          marginBottom: 6,
+          color: "#000",
+          textTransform: "uppercase",
+          letterSpacing: 0.3,
+          lineHeight: 1.4
+        }}>
+          {product.name}
+        </div>
+      </Link>
+
+      {/* Price and Actions */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#000" }}>
+          {product.currency} {product.price.toFixed(2)}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <QuickAddButton
+            productId={product.id}
+            productSlug={product.slug}
+            productName={product.name}
+            brandName={product.brand?.name || "Unknown"}
+            price={product.price}
+            currency={product.currency}
+            imageUrl={mainImage}
+            sizes={product.product_sizes || []}
+          />
+          <FavoriteButton
+            productId={product.id}
+            initialIsFavorited={isFavorited}
+            size={16}
+            variant="inline"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function CatalogPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sortBy, setSortBy] = useState<string>("NEW");
+  const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
+
+  // Dropdown states
+  const [showBrandFilter, setShowBrandFilter] = useState(false);
+  const [showSizeFilter, setShowSizeFilter] = useState(false);
+  const [showPriceFilter, setShowPriceFilter] = useState(false);
+
+  // Filter states
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [minPrice, setMinPrice] = useState<string>("");
+  const [maxPrice, setMaxPrice] = useState<string>("");
+
+  const [brands, setBrands] = useState<string[]>([]);
+  const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
+
+  useEffect(() => {
+    loadProducts();
+    loadFavorites();
+  }, []);
+
+  async function loadFavorites() {
+    const ids = await getFavoritedProductIds();
+    setFavoritedIds(new Set(ids));
+  }
+
+  async function loadProducts() {
+    if (!supabase) return;
+
+    const { data, error } = await supabase
+      .from("products")
+      .select(`
+        id,
+        name,
+        slug,
+        price,
+        currency,
+        category,
+        created_at,
+        brands(name, slug, logo_url, country),
+        product_images(image_url, is_main, display_order),
+        product_sizes(size, in_stock)
+      `)
+      .eq("status", "approved")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error loading products:", error);
+      setLoading(false);
+      return;
+    }
+
+    const transformedData = (data || []).map(product => ({
+      ...product,
+      brand: Array.isArray(product.brands) ? product.brands[0] : product.brands
+    }));
+
+    setProducts(transformedData);
+
+    const uniqueBrands = [...new Set(transformedData.map(p => p.brand?.name).filter(Boolean))];
+    setBrands(uniqueBrands as string[]);
+
+    setLoading(false);
+  }
+
+  // Filter products
+  const filteredProducts = products.filter(product => {
+    if (selectedBrands.length > 0 && !selectedBrands.includes(product.brand?.name || "")) {
+      return false;
+    }
+
+    if (selectedSizes.length > 0) {
+      const productSizes = product.product_sizes?.map(s => s.size) || [];
+      if (!selectedSizes.some(size => productSizes.includes(size))) {
+        return false;
+      }
+    }
+
+    const price = product.price;
+    if (minPrice && price < parseFloat(minPrice)) return false;
+    if (maxPrice && price > parseFloat(maxPrice)) return false;
+
+    return true;
+  });
+
+  // Sort products
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    if (sortBy === "NEW") {
+      return 0;
+    } else if (sortBy === "PRICE_LOW") {
+      return a.price - b.price;
+    } else if (sortBy === "PRICE_HIGH") {
+      return b.price - a.price;
+    }
+    return 0;
+  });
+
+  const isNew = (product: Product) => {
+    if (!product.created_at) return false;
+    const created = new Date(product.created_at);
+    const now = new Date();
+    const diffDays = (now.getTime() - created.getTime()) / (1000 * 3600 * 24);
+    return diffDays <= 30;
+  };
+
+  if (loading) {
+    return (
+      <div style={{ padding: "120px 24px", textAlign: "center", fontSize: 13, color: "#999" }}>
+        Loading...
+      </div>
+    );
+  }
+
+  return (
+    <main style={{ padding: "40px 60px", maxWidth: 1600, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
+          CATALOG
+        </h1>
+      </div>
+
+      {/* Filters Bar */}
+      <div style={{
+        display: "flex",
+        gap: 20,
+        marginBottom: 50,
+        paddingBottom: 20,
+        borderBottom: "1px solid #e6e6e6",
+        alignItems: "center",
+        flexWrap: "wrap"
+      }}>
+
+        {/* Sort Button */}
+        <button
+          onClick={() => setSortBy(sortBy === "NEW" ? "PRICE_LOW" : sortBy === "PRICE_LOW" ? "PRICE_HIGH" : "NEW")}
+          style={{
+            padding: 0,
+            background: "none",
+            border: "none",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 1,
+            textTransform: "uppercase",
+            cursor: "pointer",
+            color: "#000"
+          }}
+        >
+          {sortBy === "NEW" ? "BY RECENCY ↓" : sortBy === "PRICE_LOW" ? "PRICE ↓" : "PRICE ↑"}
+        </button>
+
+        {/* Brand Filter */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => {
+              setShowBrandFilter(!showBrandFilter);
+              setShowSizeFilter(false);
+              setShowPriceFilter(false);
+            }}
+            style={{
+              padding: 0,
+              background: "none",
+              border: "none",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+              cursor: "pointer",
+              color: selectedBrands.length > 0 ? "#000" : "#999"
+            }}
+          >
+            BRAND {selectedBrands.length > 0 && `(${selectedBrands.length})`}
+          </button>
+
+          {showBrandFilter && brands.length > 0 && (
+            <div style={{
+              position: "absolute",
+              top: 45,
+              left: 0,
+              background: "#fff",
+              border: "1px solid #e6e6e6",
+              borderRadius: 12,
+              padding: "16px",
+              minWidth: 200,
+              zIndex: 100,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
+            }}>
+              {brands.map(brand => (
+                <label key={brand} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 13, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedBrands.includes(brand)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedBrands([...selectedBrands, brand]);
+                      } else {
+                        setSelectedBrands(selectedBrands.filter(b => b !== brand));
+                      }
+                    }}
+                    style={{ width: 16, height: 16 }}
+                  />
+                  <span>{brand}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Size Filter */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => {
+              setShowSizeFilter(!showSizeFilter);
+              setShowBrandFilter(false);
+              setShowPriceFilter(false);
+            }}
+            style={{
+              padding: 0,
+              background: "none",
+              border: "none",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+              cursor: "pointer",
+              color: selectedSizes.length > 0 ? "#000" : "#999"
+            }}
+          >
+            SIZE {selectedSizes.length > 0 && `(${selectedSizes.length})`}
+          </button>
+
+          {showSizeFilter && (
+            <div style={{
+              position: "absolute",
+              top: 45,
+              left: 0,
+              background: "#fff",
+              border: "1px solid #e6e6e6",
+              borderRadius: 12,
+              padding: "16px",
+              zIndex: 100,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
+            }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {sizes.map(size => (
+                  <button
+                    key={size}
+                    onClick={() => {
+                      if (selectedSizes.includes(size)) {
+                        setSelectedSizes(selectedSizes.filter(s => s !== size));
+                      } else {
+                        setSelectedSizes([...selectedSizes, size]);
+                      }
+                    }}
+                    style={{
+                      padding: "10px 16px",
+                      border: selectedSizes.includes(size) ? "2px solid #000" : "1px solid #e6e6e6",
+                      background: selectedSizes.includes(size) ? "#000" : "#fff",
+                      color: selectedSizes.includes(size) ? "#fff" : "#000",
+                      cursor: "pointer",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      borderRadius: 8
+                    }}
+                  >
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Price Filter */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => {
+              setShowPriceFilter(!showPriceFilter);
+              setShowBrandFilter(false);
+              setShowSizeFilter(false);
+            }}
+            style={{
+              padding: 0,
+              background: "none",
+              border: "none",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+              cursor: "pointer",
+              color: (minPrice || maxPrice) ? "#000" : "#999"
+            }}
+          >
+            PRICE
+          </button>
+
+          {showPriceFilter && (
+            <div style={{
+              position: "absolute",
+              top: 45,
+              left: 0,
+              background: "#fff",
+              border: "1px solid #e6e6e6",
+              borderRadius: 12,
+              padding: "16px",
+              zIndex: 100,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
+            }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <input
+                  type="number"
+                  placeholder="Min"
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(e.target.value)}
+                  style={{
+                    width: 80,
+                    padding: "10px 12px",
+                    border: "1px solid #e6e6e6",
+                    borderRadius: 8,
+                    fontSize: 13
+                  }}
+                />
+                <span style={{ fontSize: 13, color: "#999" }}>-</span>
+                <input
+                  type="number"
+                  placeholder="Max"
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  style={{
+                    width: 80,
+                    padding: "10px 12px",
+                    border: "1px solid #e6e6e6",
+                    borderRadius: 8,
+                    fontSize: 13
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Disabled filters */}
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "#ccc" }}>COLOR</span>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "#ccc" }}>STYLE</span>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "#ccc" }}>GENDER</span>
+
+        {/* Clear All */}
+        {(selectedBrands.length > 0 || selectedSizes.length > 0 || minPrice || maxPrice) && (
+          <button
+            onClick={() => {
+              setSelectedBrands([]);
+              setSelectedSizes([]);
+              setMinPrice("");
+              setMaxPrice("");
+            }}
+            style={{
+              padding: 0,
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              fontSize: 10,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+              color: "#000",
+              textDecoration: "underline",
+              marginLeft: "auto"
+            }}
+          >
+            CLEAR ALL
+          </button>
+        )}
+      </div>
+
+      {/* Products Grid */}
+      {sortedProducts.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "100px 0", color: "#CCCCCC", fontSize: 12, textTransform: "uppercase", letterSpacing: 1 }}>
+          NO PRODUCTS FOUND
+        </div>
+      ) : (
+        <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, rowGap: 40 }}>
+          {sortedProducts.map((product) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              isNew={isNew(product)}
+              isFavorited={favoritedIds.has(product.id)}
+            />
+          ))}
+        </section>
+      )}
+    </main>
+  );
+}

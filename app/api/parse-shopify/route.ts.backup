@@ -1,0 +1,174 @@
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(request: NextRequest) {
+  try {
+    const { url } = await request.json();
+
+    if (!url || typeof url !== "string") {
+      return NextResponse.json({ error: "URL is required" }, { status: 400 });
+    }
+
+    // Fetch the Shopify product page HTML
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+      },
+    });
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: "Failed to fetch product page" },
+        { status: response.status }
+      );
+    }
+
+    const html = await response.text();
+
+    // Extract sections from HTML
+    const sections = extractSections(html);
+
+    // Log what we found for debugging
+    console.log("Parsed sections:", JSON.stringify(sections, null, 2));
+
+    return NextResponse.json(sections);
+  } catch (error) {
+    console.error("Error parsing Shopify page:", error);
+    return NextResponse.json(
+      { error: "Failed to parse product page" },
+      { status: 500 }
+    );
+  }
+}
+
+function extractSections(html: string) {
+  const sections: {
+    aboutUs?: string;
+    sizeChart?: string;
+    shipping?: string;
+    washing?: string;
+    contact?: string;
+    details?: string;
+  } = {};
+
+  // Check for <details> tags (Shopify uses these for product accordions)
+  const detailsRegex = /<details[^>]*>([\s\S]*?)<\/details>/gi;
+  let detailsMatch;
+  const technicalDetails: string[] = [];
+
+  console.log("Parsing product details tags...");
+
+  while ((detailsMatch = detailsRegex.exec(html)) !== null) {
+    const detailsContent = detailsMatch[1];
+
+    // Extract <summary> tag (the heading)
+    const summaryMatch = detailsContent.match(/<summary[^>]*>([\s\S]*?)<\/summary>/i);
+    if (!summaryMatch) continue;
+
+    const heading = summaryMatch[1].replace(/<[^>]*>/g, "").trim().toUpperCase();
+
+    // Extract content after </summary>
+    const contentAfterSummary = detailsContent.split(/<\/summary>/i)[1];
+    if (!contentAfterSummary) continue;
+
+    console.log(`Found detail: "${heading}"`);
+
+    // Extract text from content
+    const textContent = extractTextContent(contentAfterSummary);
+
+    if (!textContent) continue;
+
+    // Assign to appropriate field based on heading
+    if (heading.includes("ABOUT") || heading.includes("ÜBER UNS")) {
+      sections.aboutUs = textContent;
+    } else if (heading.includes("SIZE") || heading.includes("CHART") || heading.includes("MODEL") || heading.includes("GRÖßENTABELLE")) {
+      sections.sizeChart = textContent;
+    } else if (heading.includes("SHIPPING") || heading.includes("DELIVERY") || heading.includes("VERSAND")) {
+      sections.shipping = textContent;
+    } else if (heading.includes("WASHING") || heading.includes("CARE") || heading.includes("WASH") || heading.includes("PFLEGE") || heading.includes("WÄSCHE")) {
+      sections.washing = textContent;
+    } else if (heading.includes("CONTACT") || heading.includes("EMAIL") || heading.includes("SUPPORT") || heading.includes("KONTAKT")) {
+      sections.contact = textContent;
+    } else if (heading.includes("DETAIL")) {
+      sections.details = textContent;
+    }
+  }
+
+  // Try to find technical details (GSM, Cotton, etc.) in lists before first h2
+  const beforeH2 = html.split(/<h2[^>]*>/i)[0];
+  const ulRegex = /<ul[^>]*>([\s\S]*?)<\/ul>/gi;
+  let ulMatch;
+
+  while ((ulMatch = ulRegex.exec(beforeH2)) !== null) {
+    const listContent = ulMatch[1];
+    const items = extractListItems(listContent);
+
+    items.forEach((item) => {
+      if (isTechnicalDetail(item)) {
+        technicalDetails.push(`• ${item}`);
+      }
+    });
+  }
+
+  if (technicalDetails.length > 0) {
+    sections.details = technicalDetails.join("\n");
+  }
+
+  return sections;
+}
+
+function extractTextContent(html: string): string {
+  const parts: string[] = [];
+
+  // Extract paragraphs
+  const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+  let pMatch;
+  while ((pMatch = pRegex.exec(html)) !== null) {
+    const text = pMatch[1].replace(/<[^>]*>/g, "").trim();
+    if (text) parts.push(text);
+  }
+
+  // Extract lists
+  const ulRegex = /<ul[^>]*>([\s\S]*?)<\/ul>/gi;
+  let ulMatch;
+  while ((ulMatch = ulRegex.exec(html)) !== null) {
+    const items = extractListItems(ulMatch[1]);
+    items.forEach((item) => parts.push(`• ${item}`));
+  }
+
+  // Extract h3-h6 headings
+  const headingRegex = /<h[3-6][^>]*>([\s\S]*?)<\/h[3-6]>/gi;
+  let hMatch;
+  while ((hMatch = headingRegex.exec(html)) !== null) {
+    const text = hMatch[1].replace(/<[^>]*>/g, "").trim();
+    if (text) parts.push(`\n${text}`);
+  }
+
+  return parts.join("\n").trim();
+}
+
+function extractListItems(html: string): string[] {
+  const items: string[] = [];
+  const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+  let match;
+
+  while ((match = liRegex.exec(html)) !== null) {
+    const text = match[1].replace(/<[^>]*>/g, "").trim();
+    if (text) items.push(text);
+  }
+
+  return items;
+}
+
+function isTechnicalDetail(text: string): boolean {
+  const upper = text.toUpperCase();
+  return (
+    upper.includes("GSM") ||
+    upper.includes("WEIGHT") ||
+    upper.includes("COTTON") ||
+    upper.includes("POLYESTER") ||
+    upper.includes("FIT") ||
+    upper.includes("FABRIC") ||
+    /\d+%/.test(upper) ||
+    /\d+\s*G\/M/.test(upper)
+  );
+}
