@@ -8,7 +8,10 @@
       "Bash(xargs:*)",
       "Bash(npm install:*)",
       "Bash(npx next build:*)",
-      "WebFetch(domain:developers.lava.top)"
+      "WebFetch(domain:developers.lava.top)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)"
     ]
   }
 }
