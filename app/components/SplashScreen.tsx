@@ -7,13 +7,6 @@ export default function SplashScreen() {
   const [isFading, setIsFading] = useState(false);
 
   useEffect(() => {
-    // Check if splash was already shown this session
-    const splashShown = sessionStorage.getItem("splashShown");
-    if (splashShown) {
-      setIsVisible(false);
-      return;
-    }
-
     // Start fading after 1.5 seconds
     const fadeTimer = setTimeout(() => {
       setIsFading(true);
@@ -22,7 +15,6 @@ export default function SplashScreen() {
     // Hide completely after fade animation
     const hideTimer = setTimeout(() => {
       setIsVisible(false);
-      sessionStorage.setItem("splashShown", "true");
     }, 2300);
 
     return () => {
