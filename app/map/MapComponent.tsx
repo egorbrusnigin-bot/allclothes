@@ -129,7 +129,6 @@ export default function MapComponent({ brands }: MapComponentProps) {
       onMove={(evt) => setViewState(evt.viewState)}
       style={{ height: "calc(100vh - 300px)", minHeight: 500, width: "100%" }}
       mapStyle={mapStyle}
-      attributionControl={true}
     >
       {brands.map((brand) => {
         if (!brand.latitude || !brand.longitude) return null;
