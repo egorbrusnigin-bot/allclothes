@@ -232,35 +232,40 @@ export default function Home() {
 
   async function loadProducts() {
     if (!supabase) {
+      console.error("Supabase not configured");
       setLoading(false);
       return;
     }
 
-    const { data, error } = await supabase
-      .from("products")
-      .select(`
-        id,
-        slug,
-        name,
-        price,
-        currency,
-        created_at,
-        brands(name, slug, logo_url, country),
-        product_images(image_url, is_main, display_order),
-        product_sizes(size, in_stock)
-      `)
-      .eq("status", "approved")
-      .order("created_at", { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from("products")
+        .select(`
+          id,
+          slug,
+          name,
+          price,
+          currency,
+          created_at,
+          brands(name, slug, logo_url, country),
+          product_images(image_url, is_main, display_order),
+          product_sizes(size, in_stock)
+        `)
+        .eq("status", "approved")
+        .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Error loading products:", error);
-    } else {
-      // Transform brands from array to object
-      const transformedData = (data || []).map(product => ({
-        ...product,
-        brand: Array.isArray(product.brands) ? product.brands[0] : product.brands
-      }));
-      setProducts(transformedData);
+      if (error) {
+        console.error("Error loading products:", error);
+      } else {
+        // Transform brands from array to object
+        const transformedData = (data || []).map(product => ({
+          ...product,
+          brand: Array.isArray(product.brands) ? product.brands[0] : product.brands
+        }));
+        setProducts(transformedData);
+      }
+    } catch (err) {
+      console.error("Failed to load products:", err);
     }
     setLoading(false);
   }
