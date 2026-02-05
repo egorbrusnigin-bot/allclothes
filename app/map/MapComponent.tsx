@@ -43,6 +43,8 @@ export default function MapComponent({ brands }: MapComponentProps) {
   // MapTiler ключ (бесплатно 100k запросов/месяц)
   const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY || "get_your_own_OpIi9ZULNHzrESv6T2vL";
 
+  console.log('MapTiler key:', MAPTILER_KEY ? 'SET' : 'NOT SET', 'Value starts with:', MAPTILER_KEY?.substring(0, 5));
+
   // Темный минималистичный стиль: черная земля, белое море
   const mapStyle = `https://api.maptiler.com/maps/dataviz-dark/style.json?key=${MAPTILER_KEY}`;
 
