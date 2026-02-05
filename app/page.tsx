@@ -39,8 +39,19 @@ function ProductCard({ product, isNew, isFavorited = false }: { product: Product
     .sort((a, b) => a.display_order - b.display_order)
     .map(img => img.image_url);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [imagesPreloaded, setImagesPreloaded] = useState(false);
 
   const mainImage = allImages[0] || "";
+
+  // Preload all images when hovering
+  const preloadImages = () => {
+    if (imagesPreloaded || allImages.length <= 1) return;
+    allImages.forEach(src => {
+      const img = new Image();
+      img.src = src;
+    });
+    setImagesPreloaded(true);
+  };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (allImages.length <= 1) return;
@@ -57,6 +68,7 @@ function ProductCard({ product, isNew, isFavorited = false }: { product: Product
     <div>
       <div
         style={{ position: "relative", marginBottom: 10 }}
+        onMouseEnter={preloadImages}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setCurrentImageIndex(0)}
       >
