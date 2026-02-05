@@ -6,7 +6,9 @@ import Link from "next/link";
 import { getCountryFlag } from "../../lib/countryFlags";
 import { isProductFavorited } from "../../lib/favorites";
 import { addToCart, addToRecentlyViewed } from "../../lib/cart";
+import { formatPrice } from "../../lib/currency";
 import FavoriteButton from "../../components/FavoriteButton";
+import LoadingLogo from "../../components/LoadingLogo";
 
 interface Product {
   id: string;
@@ -52,11 +54,16 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     care: false,
     contact: false
   });
+  const [, setCurrencyUpdate] = useState(0);
 
   useEffect(() => {
     params.then(p => {
       loadProduct(p.id);
     });
+
+    const handleCurrencyChange = () => setCurrencyUpdate(n => n + 1);
+    window.addEventListener("currencyChanged", handleCurrencyChange);
+    return () => window.removeEventListener("currencyChanged", handleCurrencyChange);
   }, [params]);
 
   async function loadProduct(productSlug: string) {
@@ -167,11 +174,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   }
 
   if (loading) {
-    return (
-      <div style={{ padding: 40, textAlign: "center", opacity: 0.6, animation: "fadeIn 0.3s ease-out" }}>
-        Loading...
-      </div>
-    );
+    return <LoadingLogo />;
   }
 
   if (!product) {
@@ -185,7 +188,6 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     );
   }
 
-  const currencySymbol = product.currency === "EUR" ? "€" : product.currency === "USD" ? "$" : "£";
   const productImages = (product.product_images || [])
     .sort((a, b) => a.display_order - b.display_order)
     .map(img => img.image_url);
@@ -218,6 +220,9 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                   marginBottom: 16,
                   display: "block"
                 }}
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
               />
 
             </div>
@@ -243,6 +248,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                     border: currentImageIndex === index ? "1px solid #000" : "1px solid #e6e6e6",
                     opacity: currentImageIndex === index ? 1 : 0.5
                   }}
+                  loading="lazy"
+                  decoding="async"
                 />
               ))}
             </div>
@@ -258,7 +265,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
           {/* Price */}
           <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 32, borderBottom: "1px solid #e6e6e6", paddingBottom: 16 }}>
-            {currencySymbol}{product.price.toFixed(2)}
+            {formatPrice(product.price, product.currency)}
           </div>
 
           {/* Size selection */}

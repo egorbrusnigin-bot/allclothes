@@ -5,8 +5,10 @@ import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { getCountryFlag } from "../lib/countryFlags";
 import { getFavoritedProductIds } from "../lib/favorites";
+import { formatPrice } from "../lib/currency";
 import FavoriteButton from "../components/FavoriteButton";
 import QuickAddButton from "../components/QuickAddButton";
+import LoadingLogo from "../components/LoadingLogo";
 
 interface Product {
   id: string;
@@ -69,6 +71,8 @@ function ProductCard({ product, isNew, isFavorited = false }: { product: Product
               alt={product.name}
               style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", display: "block", userSelect: "none" }}
               draggable={false}
+              loading="lazy"
+              decoding="async"
             />
           ) : (
             <div style={{ width: "100%", aspectRatio: "3/4", background: "#f5f5f5" }} />
@@ -170,7 +174,7 @@ function ProductCard({ product, isNew, isFavorited = false }: { product: Product
       {/* Price and Actions */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#000" }}>
-          {product.currency} {product.price.toFixed(2)}
+          {formatPrice(product.price, product.currency)}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <QuickAddButton
@@ -214,10 +218,15 @@ export default function CatalogPage() {
 
   const [brands, setBrands] = useState<string[]>([]);
   const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
+  const [, setCurrencyUpdate] = useState(0);
 
   useEffect(() => {
     loadProducts();
     loadFavorites();
+
+    const handleCurrencyChange = () => setCurrencyUpdate(n => n + 1);
+    window.addEventListener("currencyChanged", handleCurrencyChange);
+    return () => window.removeEventListener("currencyChanged", handleCurrencyChange);
   }, []);
 
   async function loadFavorites() {
@@ -305,11 +314,7 @@ export default function CatalogPage() {
   };
 
   if (loading) {
-    return (
-      <div style={{ padding: "120px 24px", textAlign: "center", fontSize: 13, color: "#999" }}>
-        Loading...
-      </div>
-    );
+    return <LoadingLogo />;
   }
 
   return (

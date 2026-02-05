@@ -6,8 +6,10 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import { getCountryFlag } from "../../lib/countryFlags";
 import { getFavoritedProductIds } from "../../lib/favorites";
+import { formatPrice } from "../../lib/currency";
 import FavoriteButton from "../../components/FavoriteButton";
 import QuickAddButton from "../../components/QuickAddButton";
+import LoadingLogo from "../../components/LoadingLogo";
 
 interface Brand {
   id: string;
@@ -79,6 +81,8 @@ function ProductCard({ product, isNew, isFavorited = false, brandName, brandCoun
               alt={product.name}
               style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", display: "block", userSelect: "none" }}
               draggable={false}
+              loading="lazy"
+              decoding="async"
             />
           ) : (
             <div style={{ width: "100%", aspectRatio: "3/4", background: "#f5f5f5" }} />
@@ -178,7 +182,7 @@ function ProductCard({ product, isNew, isFavorited = false, brandName, brandCoun
       {/* Price and Actions */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#000" }}>
-          {product.currency} {product.price.toFixed(2)}
+          {formatPrice(product.price, product.currency)}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <QuickAddButton
@@ -211,12 +215,17 @@ export default function BrandPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
+  const [, setCurrencyUpdate] = useState(0);
 
   useEffect(() => {
     if (slug) {
       fetchBrandData();
     }
     loadFavorites();
+
+    const handleCurrencyChange = () => setCurrencyUpdate(n => n + 1);
+    window.addEventListener("currencyChanged", handleCurrencyChange);
+    return () => window.removeEventListener("currencyChanged", handleCurrencyChange);
   }, [slug]);
 
   async function loadFavorites() {
@@ -274,7 +283,7 @@ export default function BrandPage() {
     return diffDays <= 30;
   };
 
-  if (loading) return null;
+  if (loading) return <LoadingLogo />;
 
   if (!brand) {
     return (
@@ -321,6 +330,8 @@ export default function BrandPage() {
               src={brand.logo_url}
               alt={brand.name}
               style={{ width: "70%", height: "70%", objectFit: "contain" }}
+              loading="lazy"
+              decoding="async"
             />
           </div>
         )}

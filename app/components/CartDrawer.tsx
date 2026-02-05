@@ -12,6 +12,7 @@ import {
   type CartItem,
   type RecentlyViewedProduct,
 } from "../lib/cart";
+import { formatPrice, formatTotal } from "../lib/currency";
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -39,8 +40,17 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
       loadCart();
     };
 
+    // Listen for currency changes
+    const handleCurrencyChange = () => {
+      loadCart();
+    };
+
     window.addEventListener("cartUpdated", handleCartUpdate);
-    return () => window.removeEventListener("cartUpdated", handleCartUpdate);
+    window.addEventListener("currencyChanged", handleCurrencyChange);
+    return () => {
+      window.removeEventListener("cartUpdated", handleCartUpdate);
+      window.removeEventListener("currencyChanged", handleCurrencyChange);
+    };
   }, []);
 
   function loadCart() {
@@ -184,6 +194,8 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         height: 106,
                         objectFit: "cover",
                       }}
+                      loading="lazy"
+                      decoding="async"
                     />
                   </Link>
 
@@ -221,7 +233,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
                     {/* Price */}
                     <div style={{ fontSize: 13, fontWeight: 700 }}>
-                      {item.currency} {(item.price * item.quantity).toFixed(2)}
+                      {formatPrice(item.price * item.quantity, item.currency)}
                     </div>
 
                     {/* Quantity Controls */}
@@ -340,6 +352,8 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         objectFit: "cover",
                         marginBottom: 8,
                       }}
+                      loading="lazy"
+                      decoding="async"
                     />
                     <div
                       style={{
@@ -361,7 +375,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                       {product.productName}
                     </div>
                     <div style={{ fontSize: 11, fontWeight: 700 }}>
-                      {product.currency} {product.price.toFixed(2)}
+                      {formatPrice(product.price, product.currency)}
                     </div>
                   </Link>
                 ))}
@@ -401,7 +415,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                 TOTAL
               </span>
               <span style={{ fontSize: 16, fontWeight: 700 }}>
-                {cartItems[0]?.currency} {total.toFixed(2)}
+                {formatTotal(total)}
               </span>
             </div>
 

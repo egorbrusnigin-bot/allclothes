@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { getCartItems, getCartTotal, type CartItem } from "../lib/cart";
+import { formatPrice, formatTotal } from "../lib/currency";
+import LoadingLogo from "../components/LoadingLogo";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -84,16 +86,9 @@ export default function CheckoutPage() {
 
   // ── loading ───────────────────────────────────────────
   if (loading) {
-    return (
-      <div style={{ padding: 60, textAlign: "center" }}>
-        <p style={{ fontSize: 11, color: "#999", letterSpacing: 1, textTransform: "uppercase", margin: 0 }}>
-          Loading...
-        </p>
-      </div>
-    );
+    return <LoadingLogo />;
   }
 
-  const currency = cartItems[0]?.currency || "EUR";
 
   // ── render ────────────────────────────────────────────
   return (
@@ -167,7 +162,7 @@ export default function CheckoutPage() {
 
               {/* price */}
               <div style={{ fontSize: 13, fontWeight: 700 }}>
-                {item.currency} {(item.price * item.quantity).toFixed(2)}
+                {formatPrice(item.price * item.quantity, item.currency)}
               </div>
             </div>
           ))}
@@ -194,7 +189,7 @@ export default function CheckoutPage() {
             TOTAL
           </span>
           <span style={{ fontSize: 16, fontWeight: 700 }}>
-            {currency} {total.toFixed(2)}
+            {formatTotal(total)}
           </span>
         </div>
       </div>
@@ -262,7 +257,7 @@ export default function CheckoutPage() {
           letterSpacing: 1,
         }}
       >
-        {paying ? "PROCESSING..." : `PAY ${currency} ${total.toFixed(2)}`}
+        {paying ? "PROCESSING..." : `PAY ${formatTotal(total)}`}
       </button>
     </div>
   );

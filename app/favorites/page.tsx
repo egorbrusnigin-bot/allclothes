@@ -5,8 +5,10 @@ import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { getFavoriteProducts } from "../lib/favorites";
 import { getCountryFlag } from "../lib/countryFlags";
+import { formatPrice } from "../lib/currency";
 import FavoriteButton from "../components/FavoriteButton";
 import QuickAddButton from "../components/QuickAddButton";
+import LoadingLogo from "../components/LoadingLogo";
 
 interface Product {
   id: string;
@@ -72,6 +74,8 @@ function ProductCard({
               alt={product.name}
               style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", display: "block", userSelect: "none" }}
               draggable={false}
+              loading="lazy"
+              decoding="async"
             />
           ) : (
             <div style={{ width: "100%", aspectRatio: "3/4", background: "#f5f5f5" }} />
@@ -161,7 +165,7 @@ function ProductCard({
       {/* Price and Actions */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#000" }}>
-          {product.currency} {product.price.toFixed(2)}
+          {formatPrice(product.price, product.currency)}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <QuickAddButton
@@ -210,6 +214,7 @@ export default function FavoritesPage() {
 
   const [brands, setBrands] = useState<string[]>([]);
   const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
+  const [, setCurrencyUpdate] = useState(0);
 
   useEffect(() => {
     checkAuth();
@@ -224,8 +229,12 @@ export default function FavoritesPage() {
       }
     }) || { data: { subscription: { unsubscribe: () => {} } } };
 
+    const handleCurrencyChange = () => setCurrencyUpdate(n => n + 1);
+    window.addEventListener("currencyChanged", handleCurrencyChange);
+
     return () => {
       authListener?.subscription?.unsubscribe();
+      window.removeEventListener("currencyChanged", handleCurrencyChange);
     };
   }, []);
 
@@ -293,13 +302,7 @@ export default function FavoritesPage() {
   });
 
   if (loading) {
-    return (
-      <main style={{ maxWidth: 1600, margin: "48px auto", padding: "40px 60px" }}>
-        <div style={{ textAlign: "center", padding: "60px 20px", color: "#666" }}>
-          <p style={{ fontSize: 18 }}>Loading...</p>
-        </div>
-      </main>
-    );
+    return <LoadingLogo />;
   }
 
   if (!isLoggedIn) {

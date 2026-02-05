@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "../lib/supabase";
 import { getCountryFlag } from "../lib/countryFlags";
 
@@ -37,13 +38,19 @@ function BrandCard({ brand }: { brand: Brand }) {
           justifyContent: "center",
           overflow: "hidden",
           marginBottom: 10,
+          position: "relative",
         }}>
           {brand.logo_url ? (
-            <img
-              src={brand.logo_url}
-              alt={brand.name}
-              style={{ width: "55%", height: "55%", objectFit: "contain" }}
-            />
+            <div style={{ width: "55%", height: "55%", position: "relative" }}>
+              <Image
+                src={brand.logo_url}
+                alt={brand.name}
+                fill
+                sizes="150px"
+                style={{ objectFit: "contain" }}
+                loading="lazy"
+              />
+            </div>
           ) : (
             <div style={{
               fontSize: 32,

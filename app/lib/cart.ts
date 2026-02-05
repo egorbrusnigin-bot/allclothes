@@ -1,3 +1,5 @@
+import { convertToEUR } from "./currency";
+
 export interface CartItem {
   productId: string;
   productSlug: string;
@@ -130,11 +132,14 @@ export function clearCart(): void {
 }
 
 /**
- * Get cart total
+ * Get cart total (converted to EUR)
  */
 export function getCartTotal(): number {
   const cart = getCartItems();
-  return cart.reduce((total, item) => total + item.price * item.quantity, 0);
+  return cart.reduce((total, item) => {
+    const priceInEUR = convertToEUR(item.price, item.currency);
+    return total + priceInEUR * item.quantity;
+  }, 0);
 }
 
 /**

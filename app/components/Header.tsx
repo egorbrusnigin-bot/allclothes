@@ -4,16 +4,19 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { getCartItemCount } from "../lib/cart";
+import { getDisplayCurrency, setDisplayCurrency, type DisplayCurrency } from "../lib/currency";
 import CartDrawer from "./CartDrawer";
 
 export default function Header() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [currency, setCurrency] = useState<DisplayCurrency>('EUR');
 
   useEffect(() => {
     checkAuth();
     updateCartCount();
+    setCurrency(getDisplayCurrency());
 
     const { data: authListener } = supabase?.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
@@ -49,6 +52,11 @@ export default function Header() {
     setCartCount(count);
   }
 
+  function handleCurrencyChange(newCurrency: DisplayCurrency) {
+    setCurrency(newCurrency);
+    setDisplayCurrency(newCurrency);
+  }
+
   return (
     <>
       <header
@@ -73,18 +81,50 @@ export default function Header() {
         <Link href="/map" style={{ textDecoration: "none" }}>MAP</Link>
       </nav>
 
-      <Link href="/" style={{ justifySelf: "center", textDecoration: "none", fontWeight: 700, fontSize: 14, letterSpacing: 1 }}>
-        ALLCLOTHES
+      <Link href="/" style={{ justifySelf: "center", textDecoration: "none", display: "flex", alignItems: "center" }}>
+        <img src="/ALLCLOTHES.png" alt="ALLCLOTHES" style={{ height: 14 }} />
       </Link>
 
       <div style={{ display: "flex", gap: 22, justifySelf: "end", alignItems: "center", fontSize: 13, letterSpacing: 1 }}>
-        <Link href="/search" style={{ textDecoration: "none" }}>SEARCH</Link>
+        <select
+          value={currency}
+          onChange={(e) => handleCurrencyChange(e.target.value as DisplayCurrency)}
+          style={{
+            background: "none",
+            border: "none",
+            fontSize: 13,
+            letterSpacing: 1,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            color: "inherit",
+            outline: "none",
+          }}
+        >
+          <option value="EUR">€ EUR</option>
+          <option value="USD">$ USD</option>
+          <option value="GBP">£ GBP</option>
+        </select>
         {!isLoggedIn ? (
-          <Link href="/?login=1" style={{ textDecoration: "none" }}>LOG IN</Link>
+          <>
+            <Link href="/signup" style={{ textDecoration: "none" }}>SIGN UP</Link>
+            <Link
+              href="/?login=1"
+              style={{
+                textDecoration: "none",
+                background: "#000",
+                color: "#fff",
+                padding: "8px 14px",
+              }}
+            >
+              LOG IN
+            </Link>
+          </>
         ) : (
-          <Link href="/account" style={{ textDecoration: "none" }}>ACCOUNT</Link>
+          <>
+            <Link href="/account" style={{ textDecoration: "none" }}>ACCOUNT</Link>
+            <Link href="/favorites" style={{ textDecoration: "none" }}>FAVORITES</Link>
+          </>
         )}
-        <Link href="/favorites" style={{ textDecoration: "none" }}>FAVORITES</Link>
         <button
           onClick={() => setIsCartOpen(true)}
           style={{
