@@ -23,7 +23,7 @@ export default function LogoParticles() {
   const phaseRef = useRef<"assemble" | "hold" | "scatter">("assemble");
   const timerRef = useRef<number>(0);
   const logoImgRef = useRef<HTMLImageElement | null>(null);
-  const canvasSizeRef = useRef({ width: 0, height: 0 });
+  const canvasSizeRef = useRef({ width: 0, height: 0, offsetX: 0, offsetY: 0 });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -39,25 +39,39 @@ export default function LogoParticles() {
     img.onload = () => {
       logoImgRef.current = img;
       const scale = 14 / img.height;
-      const width = img.width * scale;
-      const height = 14;
+      const logoWidth = img.width * scale;
+      const logoHeight = 14;
 
-      canvas.width = width * 2;
-      canvas.height = height * 2;
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      canvasSizeRef.current = { width: canvas.width, height: canvas.height };
+      // Make canvas larger to allow particles to scatter
+      const padding = 60;
+      canvas.width = (logoWidth + padding * 2) * 2;
+      canvas.height = (logoHeight + padding * 2) * 2;
+      canvas.style.width = `${logoWidth + padding * 2}px`;
+      canvas.style.height = `${logoHeight + padding * 2}px`;
+      canvas.style.margin = `-${padding}px`;
+      canvasSizeRef.current = {
+        width: logoWidth * 2,
+        height: logoHeight * 2,
+        offsetX: padding * 2,
+        offsetY: padding * 2
+      };
 
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const offsetX = canvasSizeRef.current.offsetX;
+      const offsetY = canvasSizeRef.current.offsetY;
+      const logoW = canvasSizeRef.current.width;
+      const logoH = canvasSizeRef.current.height;
+
+      // Draw image in center to get pixel data
+      ctx.drawImage(img, offsetX, offsetY, logoW, logoH);
+      const imageData = ctx.getImageData(offsetX, offsetY, logoW, logoH);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const particles: Particle[] = [];
       const gap = 2;
 
-      for (let y = 0; y < canvas.height; y += gap) {
-        for (let x = 0; x < canvas.width; x += gap) {
-          const i = (y * canvas.width + x) * 4;
+      for (let y = 0; y < logoH; y += gap) {
+        for (let x = 0; x < logoW; x += gap) {
+          const i = (y * logoW + x) * 4;
           const alpha = imageData.data[i + 3];
 
           if (alpha > 128) {
@@ -68,11 +82,14 @@ export default function LogoParticles() {
             const angle = Math.random() * Math.PI * 2;
             const distance = 20 + Math.random() * 30;
 
+            const originX = x + offsetX;
+            const originY = y + offsetY;
+
             particles.push({
-              x: x + Math.cos(angle) * distance,
-              y: y + Math.sin(angle) * distance,
-              originX: x,
-              originY: y,
+              x: originX + Math.cos(angle) * distance,
+              y: originY + Math.sin(angle) * distance,
+              originX,
+              originY,
               color: `rgb(${r}, ${g}, ${b})`,
               size: gap * 0.8,
               vx: 0,
@@ -132,9 +149,15 @@ export default function LogoParticles() {
           timerRef.current = 0;
         }
       } else if (phaseRef.current === "hold") {
-        // Draw crisp logo image
+        // Draw crisp logo image at offset position
         if (logoImgRef.current) {
-          ctx.drawImage(logoImgRef.current, 0, 0, canvasSizeRef.current.width, canvasSizeRef.current.height);
+          ctx.drawImage(
+            logoImgRef.current,
+            canvasSizeRef.current.offsetX,
+            canvasSizeRef.current.offsetY,
+            canvasSizeRef.current.width,
+            canvasSizeRef.current.height
+          );
         }
 
         timerRef.current++;
