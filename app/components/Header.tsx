@@ -81,75 +81,8 @@ export default function Header() {
         <Link href="/map" style={{ textDecoration: "none" }}>MAP</Link>
       </nav>
 
-      <Link href="/" className="logo-link" style={{ justifySelf: "center", textDecoration: "none", display: "flex", alignItems: "center", position: "relative" }}>
-        <div className="logo-container">
-          <img src="/ALLCLOTHES.png" alt="ALLCLOTHES" className="logo-img" style={{ height: 14 }} />
-          <div className="logo-scanline" />
-        </div>
-        <style jsx global>{`
-          .logo-container {
-            position: relative;
-            overflow: hidden;
-          }
-          .logo-img {
-            animation: logoReveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            opacity: 0;
-          }
-          .logo-scanline {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(
-              90deg,
-              transparent 0%,
-              rgba(255,255,255,0.8) 50%,
-              transparent 100%
-            );
-            animation: scanMove 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            pointer-events: none;
-          }
-          @keyframes logoReveal {
-            0% {
-              opacity: 0;
-              filter: blur(8px) brightness(2);
-              transform: scale(0.95);
-            }
-            30% {
-              opacity: 0.3;
-              filter: blur(4px) brightness(1.5);
-            }
-            60% {
-              opacity: 0.7;
-              filter: blur(2px) brightness(1.2);
-            }
-            100% {
-              opacity: 1;
-              filter: blur(0) brightness(1);
-              transform: scale(1);
-            }
-          }
-          @keyframes scanMove {
-            0% {
-              transform: translateX(-100%);
-              opacity: 1;
-            }
-            70% {
-              opacity: 1;
-            }
-            100% {
-              transform: translateX(100%);
-              opacity: 0;
-            }
-          }
-          .logo-link:hover .logo-img {
-            animation: none;
-            opacity: 1;
-            filter: brightness(1.1);
-            transition: filter 0.2s ease;
-          }
-        `}</style>
+      <Link href="/" style={{ justifySelf: "center", textDecoration: "none", display: "flex", alignItems: "center" }}>
+        <img src="/ALLCLOTHES.png" alt="ALLCLOTHES" style={{ height: 14 }} />
       </Link>
 
       <div style={{ display: "flex", gap: 22, justifySelf: "end", alignItems: "center", fontSize: 13, letterSpacing: 1 }}>
