@@ -82,42 +82,72 @@ export default function Header() {
       </nav>
 
       <Link href="/" className="logo-link" style={{ justifySelf: "center", textDecoration: "none", display: "flex", alignItems: "center", position: "relative" }}>
-        <img src="/ALLCLOTHES.png" alt="ALLCLOTHES" className="logo-img" style={{ height: 14 }} />
+        <div className="logo-container">
+          <img src="/ALLCLOTHES.png" alt="ALLCLOTHES" className="logo-img" style={{ height: 14 }} />
+          <div className="logo-scanline" />
+        </div>
         <style jsx global>{`
-          .logo-link {
-            overflow: visible;
+          .logo-container {
+            position: relative;
+            overflow: hidden;
           }
           .logo-img {
-            transition: all 0.2s ease;
+            animation: logoReveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
           }
-          .logo-link:hover .logo-img {
-            animation: logoGlitch 0.3s ease;
+          .logo-scanline {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+              90deg,
+              transparent 0%,
+              rgba(255,255,255,0.8) 50%,
+              transparent 100%
+            );
+            animation: scanMove 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            pointer-events: none;
           }
-          @keyframes logoGlitch {
+          @keyframes logoReveal {
             0% {
-              transform: translate(0);
-              filter: none;
+              opacity: 0;
+              filter: blur(8px) brightness(2);
+              transform: scale(0.95);
             }
-            20% {
-              transform: translate(-2px, 1px);
-              filter: blur(0.5px);
-            }
-            40% {
-              transform: translate(2px, -1px);
-              filter: hue-rotate(90deg);
+            30% {
+              opacity: 0.3;
+              filter: blur(4px) brightness(1.5);
             }
             60% {
-              transform: translate(-1px, -1px);
-              filter: blur(0.3px) hue-rotate(-90deg);
-            }
-            80% {
-              transform: translate(1px, 1px);
-              filter: none;
+              opacity: 0.7;
+              filter: blur(2px) brightness(1.2);
             }
             100% {
-              transform: translate(0);
-              filter: none;
+              opacity: 1;
+              filter: blur(0) brightness(1);
+              transform: scale(1);
             }
+          }
+          @keyframes scanMove {
+            0% {
+              transform: translateX(-100%);
+              opacity: 1;
+            }
+            70% {
+              opacity: 1;
+            }
+            100% {
+              transform: translateX(100%);
+              opacity: 0;
+            }
+          }
+          .logo-link:hover .logo-img {
+            animation: none;
+            opacity: 1;
+            filter: brightness(1.1);
+            transition: filter 0.2s ease;
           }
         `}</style>
       </Link>
