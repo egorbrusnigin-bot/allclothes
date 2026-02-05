@@ -29,39 +29,48 @@ export default function LogoParticles() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
 
     const img = new Image();
-    img.crossOrigin = "anonymous";
     img.src = "/ALLCLOTHES.png";
 
     img.onload = () => {
       logoImgRef.current = img;
-      const scale = 14 / img.height;
-      const logoWidth = img.width * scale;
-      const logoHeight = 14;
 
-      // Make canvas larger to allow particles to scatter
-      const padding = 60;
-      canvas.width = (logoWidth + padding * 2) * 2;
-      canvas.height = (logoHeight + padding * 2) * 2;
+      // Target logo height in display pixels
+      const targetHeight = 14;
+      const scale = targetHeight / img.height;
+      const logoWidth = Math.round(img.width * scale);
+      const logoHeight = targetHeight;
+
+      // Padding for particles to scatter
+      const padding = 50;
+
+      // Use 2x for retina
+      const dpr = 2;
+      const canvasW = (logoWidth + padding * 2) * dpr;
+      const canvasH = (logoHeight + padding * 2) * dpr;
+
+      canvas.width = canvasW;
+      canvas.height = canvasH;
       canvas.style.width = `${logoWidth + padding * 2}px`;
       canvas.style.height = `${logoHeight + padding * 2}px`;
       canvas.style.margin = `-${padding}px`;
+
+      const offsetX = padding * dpr;
+      const offsetY = padding * dpr;
+      const logoW = logoWidth * dpr;
+      const logoH = logoHeight * dpr;
+
       canvasSizeRef.current = {
-        width: logoWidth * 2,
-        height: logoHeight * 2,
-        offsetX: padding * 2,
-        offsetY: padding * 2
+        width: logoW,
+        height: logoH,
+        offsetX,
+        offsetY
       };
 
-      const offsetX = canvasSizeRef.current.offsetX;
-      const offsetY = canvasSizeRef.current.offsetY;
-      const logoW = canvasSizeRef.current.width;
-      const logoH = canvasSizeRef.current.height;
-
-      // Draw image in center to get pixel data
+      // Draw image to read pixel data
       ctx.drawImage(img, offsetX, offsetY, logoW, logoH);
       const imageData = ctx.getImageData(offsetX, offsetY, logoW, logoH);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -72,15 +81,18 @@ export default function LogoParticles() {
       for (let y = 0; y < logoH; y += gap) {
         for (let x = 0; x < logoW; x += gap) {
           const i = (y * logoW + x) * 4;
+          const r = imageData.data[i];
+          const g = imageData.data[i + 1];
+          const b = imageData.data[i + 2];
           const alpha = imageData.data[i + 3];
 
-          if (alpha > 128) {
-            const r = imageData.data[i];
-            const g = imageData.data[i + 1];
-            const b = imageData.data[i + 2];
+          // Check if pixel is visible (either has alpha or is dark on white bg)
+          const isDark = (r + g + b) / 3 < 128;
+          const isVisible = alpha > 50 || (alpha > 0 && isDark);
 
+          if (isVisible) {
             const angle = Math.random() * Math.PI * 2;
-            const distance = 20 + Math.random() * 30;
+            const distance = 30 + Math.random() * 50;
 
             const originX = x + offsetX;
             const originY = y + offsetY;
@@ -90,12 +102,12 @@ export default function LogoParticles() {
               y: originY + Math.sin(angle) * distance,
               originX,
               originY,
-              color: `rgb(${r}, ${g}, ${b})`,
-              size: gap * 0.8,
+              color: alpha > 50 ? `rgb(${r}, ${g}, ${b})` : "#000",
+              size: gap * 0.9,
               vx: 0,
               vy: 0,
-              friction: 0.92,
-              ease: 0.04 + Math.random() * 0.02,
+              friction: 0.94,
+              ease: 0.015 + Math.random() * 0.01,
             });
           }
         }
@@ -110,8 +122,12 @@ export default function LogoParticles() {
 
     function scatterParticles() {
       particlesRef.current.forEach((p) => {
+        // Reset position to origin first for smooth scatter
+        p.x = p.originX;
+        p.y = p.originY;
+
         const angle = Math.random() * Math.PI * 2;
-        const force = 0.8 + Math.random() * 1.2;
+        const force = 1 + Math.random() * 1.5;
         p.vx = Math.cos(angle) * force;
         p.vy = Math.sin(angle) * force;
       });
@@ -128,8 +144,9 @@ export default function LogoParticles() {
         particlesRef.current.forEach((p) => {
           const dx = p.originX - p.x;
           const dy = p.originY - p.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
 
-          if (Math.abs(dx) > 0.3 || Math.abs(dy) > 0.3) {
+          if (dist > 0.5) {
             allSettled = false;
           }
 
@@ -145,11 +162,16 @@ export default function LogoParticles() {
         });
 
         if (allSettled) {
+          // Snap particles to their exact positions
+          particlesRef.current.forEach((p) => {
+            p.x = p.originX;
+            p.y = p.originY;
+          });
           phaseRef.current = "hold";
           timerRef.current = 0;
         }
       } else if (phaseRef.current === "hold") {
-        // Draw crisp logo image at offset position
+        // Draw crisp logo image
         if (logoImgRef.current) {
           ctx.drawImage(
             logoImgRef.current,
@@ -161,7 +183,7 @@ export default function LogoParticles() {
         }
 
         timerRef.current++;
-        if (timerRef.current > 300) { // Hold for ~5 seconds at 60fps
+        if (timerRef.current > 240) { // Hold for ~4 seconds
           phaseRef.current = "scatter";
           timerRef.current = 0;
           scatterParticles();
@@ -170,15 +192,15 @@ export default function LogoParticles() {
         particlesRef.current.forEach((p) => {
           p.x += p.vx;
           p.y += p.vy;
-          p.vx *= 0.995;
-          p.vy *= 0.995;
+          p.vx *= 0.98;
+          p.vy *= 0.98;
 
           ctx.fillStyle = p.color;
           ctx.fillRect(p.x, p.y, p.size, p.size);
         });
 
         timerRef.current++;
-        if (timerRef.current > 90) { // Scatter for ~1.5 seconds
+        if (timerRef.current > 80) { // Scatter for ~1.3 seconds
           phaseRef.current = "assemble";
           timerRef.current = 0;
         }
