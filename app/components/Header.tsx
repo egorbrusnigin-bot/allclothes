@@ -81,8 +81,45 @@ export default function Header() {
         <Link href="/map" style={{ textDecoration: "none" }}>MAP</Link>
       </nav>
 
-      <Link href="/" style={{ justifySelf: "center", textDecoration: "none", display: "flex", alignItems: "center" }}>
-        <img src="/ALLCLOTHES.png" alt="ALLCLOTHES" style={{ height: 14 }} />
+      <Link href="/" className="logo-link" style={{ justifySelf: "center", textDecoration: "none", display: "flex", alignItems: "center", position: "relative" }}>
+        <img src="/ALLCLOTHES.png" alt="ALLCLOTHES" className="logo-img" style={{ height: 14 }} />
+        <style jsx global>{`
+          .logo-link {
+            overflow: visible;
+          }
+          .logo-img {
+            transition: all 0.2s ease;
+          }
+          .logo-link:hover .logo-img {
+            animation: logoGlitch 0.3s ease;
+          }
+          @keyframes logoGlitch {
+            0% {
+              transform: translate(0);
+              filter: none;
+            }
+            20% {
+              transform: translate(-2px, 1px);
+              filter: blur(0.5px);
+            }
+            40% {
+              transform: translate(2px, -1px);
+              filter: hue-rotate(90deg);
+            }
+            60% {
+              transform: translate(-1px, -1px);
+              filter: blur(0.3px) hue-rotate(-90deg);
+            }
+            80% {
+              transform: translate(1px, 1px);
+              filter: none;
+            }
+            100% {
+              transform: translate(0);
+              filter: none;
+            }
+          }
+        `}</style>
       </Link>
 
       <div style={{ display: "flex", gap: 22, justifySelf: "end", alignItems: "center", fontSize: 13, letterSpacing: 1 }}>
