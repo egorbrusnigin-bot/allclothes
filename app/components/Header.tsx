@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase";
 import { getCartItemCount } from "../lib/cart";
 import { getDisplayCurrency, setDisplayCurrency, type DisplayCurrency } from "../lib/currency";
 import CartDrawer from "./CartDrawer";
+import LogoParticles from "./LogoParticles";
 
 export default function Header() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -82,7 +83,7 @@ export default function Header() {
       </nav>
 
       <Link href="/" style={{ justifySelf: "center", textDecoration: "none", display: "flex", alignItems: "center" }}>
-        <img src="/ALLCLOTHES.png" alt="ALLCLOTHES" style={{ height: 14 }} />
+        <LogoParticles />
       </Link>
 
       <div style={{ display: "flex", gap: 22, justifySelf: "end", alignItems: "center", fontSize: 13, letterSpacing: 1 }}>
