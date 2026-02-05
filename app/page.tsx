@@ -282,14 +282,6 @@ export default function Home() {
     return <LoadingLogo />;
   }
 
-  // Debug info - remove after fixing
-  const debugInfo = {
-    hasSupabase: !!supabase,
-    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'NOT SET',
-    productsCount: products.length
-  };
-  console.log('Debug:', debugInfo);
-
   return (
     <main style={{ padding: "40px 60px", maxWidth: 1600, margin: "0 auto" }}>
       {/* Header */}
