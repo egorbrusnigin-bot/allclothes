@@ -220,9 +220,17 @@ export default function Home() {
     loadProducts();
     loadFavorites();
 
+    // Fallback timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
+
     const handleCurrencyChange = () => setCurrencyUpdate(n => n + 1);
     window.addEventListener("currencyChanged", handleCurrencyChange);
-    return () => window.removeEventListener("currencyChanged", handleCurrencyChange);
+    return () => {
+      window.removeEventListener("currencyChanged", handleCurrencyChange);
+      clearTimeout(timeout);
+    };
   }, []);
 
   async function loadFavorites() {
