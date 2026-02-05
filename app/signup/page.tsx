@@ -224,8 +224,8 @@ export default function SignupPage() {
           </p>
 
           {/* Step 1: Account Type Selection */}
-          {step === 1 && (
-            <div style={{ display: "grid", gap: 16 }}>
+          {step === 1 ? (
+            <div key="step1" style={{ display: "grid", gap: 16 }}>
               <button
                 onClick={() => {
                   setAccountType("buyer");
@@ -288,11 +288,8 @@ export default function SignupPage() {
                 </div>
               </button>
             </div>
-          )}
-
-          {/* Step 2: Email & Password */}
-          {step === 2 && (
-            <div style={{ display: "grid", gap: 16 }}>
+          ) : step === 2 ? (
+            <div key="step2" style={{ display: "grid", gap: 16 }}>
               <div>
                 <label
                   style={{
@@ -474,11 +471,8 @@ export default function SignupPage() {
                 <span style={{ fontWeight: 500, fontSize: 14 }}>Continue with Google</span>
               </button>
             </div>
-          )}
-
-          {/* Step 3: OTP Verification */}
-          {step === 3 && (
-            <div style={{ display: "grid", gap: 16 }}>
+          ) : (
+            <div key="step3" style={{ display: "grid", gap: 16 }}>
               <input
                 type="text"
                 inputMode="numeric"
@@ -571,7 +565,7 @@ export default function SignupPage() {
           )}
 
           {/* Login link */}
-          {step !== 3 && (
+          {step !== 3 ? (
             <div
               style={{
                 marginTop: 24,
@@ -594,7 +588,7 @@ export default function SignupPage() {
                 Sign in
               </Link>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </main>
