@@ -41,89 +41,10 @@ export default function MapComponent({ brands }: MapComponentProps) {
   }, [selectedBrand]);
 
   // MapTiler ключ (бесплатно 100k запросов/месяц)
-  const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY || "get_your_own_OpIi9ZULNHzrESv6T2vL";
-
-  console.log('MapTiler key:', MAPTILER_KEY ? 'SET' : 'NOT SET', 'Value starts with:', MAPTILER_KEY?.substring(0, 5));
+  const MAPTILER_KEY = "9hHsiyw0AhSLha7YVTQ0";
 
   // Темный минималистичный стиль: черная земля, белое море
   const mapStyle = `https://api.maptiler.com/maps/dataviz-dark/style.json?key=${MAPTILER_KEY}`;
-
-  // Если нет ключа, показываем сообщение
-  if (!MAPTILER_KEY || MAPTILER_KEY === "get_your_own_OpIi9ZULNHzrESv6T2vL") {
-    return (
-      <div style={{
-        height: "calc(100vh - 300px)",
-        minHeight: 500,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#1a1a1a",
-        color: "#fff",
-        textAlign: "center",
-        padding: 40
-      }}>
-        <div>
-          <div style={{
-            fontSize: 13,
-            fontWeight: 700,
-            letterSpacing: 1,
-            textTransform: "uppercase",
-            marginBottom: 16,
-            color: "#fff"
-          }}>
-            3D Карта Брендов
-          </div>
-          <div style={{
-            fontSize: 11,
-            lineHeight: 1.8,
-            color: "#999",
-            marginBottom: 20,
-            maxWidth: 400
-          }}>
-            Для отображения 3D карты нужен бесплатный ключ MapTiler<br/>
-            (100,000 запросов/месяц бесплатно)
-          </div>
-          <a
-            href="https://cloud.maptiler.com/auth/widget"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: "inline-block",
-              fontSize: 11,
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: 0.5,
-              color: "#fff",
-              background: "#000",
-              padding: "12px 24px",
-              textDecoration: "none",
-              transition: "all 0.2s ease",
-              border: "1px solid #333"
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#fff";
-              e.currentTarget.style.color = "#000";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "#000";
-              e.currentTarget.style.color = "#fff";
-            }}
-          >
-            Получить Бесплатный Ключ →
-          </a>
-          <div style={{
-            fontSize: 9,
-            color: "#666",
-            marginTop: 20,
-            lineHeight: 1.6
-          }}>
-            После регистрации добавь ключ в .env.local:<br/>
-            NEXT_PUBLIC_MAPTILER_KEY=твой_ключ_здесь
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <Map
