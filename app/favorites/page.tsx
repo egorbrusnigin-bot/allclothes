@@ -18,6 +18,7 @@ interface Product {
   currency: string;
   category: string | null;
   created_at?: string;
+  brand_id?: string;
   brand?: {
     name: string;
     slug: string;
@@ -183,6 +184,7 @@ function ProductCard({
             initialIsFavorited={true}
             size={16}
             variant="inline"
+            brandId={product.brand_id}
             onToggle={(isFavorited) => {
               if (!isFavorited) {
                 onRemove(product.id);

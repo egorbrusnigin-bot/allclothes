@@ -106,8 +106,8 @@ export default function LogoParticles() {
               size: gap * 0.9,
               vx: 0,
               vy: 0,
-              friction: 0.94,
-              ease: 0.015 + Math.random() * 0.01,
+              friction: 0.96,
+              ease: 0.02 + Math.random() * 0.01,
             });
           }
         }
@@ -122,12 +122,13 @@ export default function LogoParticles() {
 
     function scatterParticles() {
       particlesRef.current.forEach((p) => {
-        // Reset position to origin first for smooth scatter
+        // Reset position to origin first
         p.x = p.originX;
         p.y = p.originY;
 
+        // Quick burst but not too far
         const angle = Math.random() * Math.PI * 2;
-        const force = 1 + Math.random() * 1.5;
+        const force = 1.5 + Math.random() * 1.5;
         p.vx = Math.cos(angle) * force;
         p.vy = Math.sin(angle) * force;
       });
@@ -148,25 +149,19 @@ export default function LogoParticles() {
 
           if (dist > 0.5) {
             allSettled = false;
+            // Simple smooth lerp - no bouncing
+            p.x += dx * 0.08;
+            p.y += dy * 0.08;
+          } else {
+            p.x = p.originX;
+            p.y = p.originY;
           }
-
-          p.vx += dx * p.ease;
-          p.vy += dy * p.ease;
-          p.vx *= p.friction;
-          p.vy *= p.friction;
-          p.x += p.vx;
-          p.y += p.vy;
 
           ctx.fillStyle = p.color;
           ctx.fillRect(p.x, p.y, p.size, p.size);
         });
 
         if (allSettled) {
-          // Snap particles to their exact positions
-          particlesRef.current.forEach((p) => {
-            p.x = p.originX;
-            p.y = p.originY;
-          });
           phaseRef.current = "hold";
           timerRef.current = 0;
         }
@@ -183,7 +178,7 @@ export default function LogoParticles() {
         }
 
         timerRef.current++;
-        if (timerRef.current > 240) { // Hold for ~4 seconds
+        if (timerRef.current > 480) { // Hold for ~8 seconds
           phaseRef.current = "scatter";
           timerRef.current = 0;
           scatterParticles();
@@ -223,6 +218,8 @@ export default function LogoParticles() {
         display: "block",
         opacity: isLoaded ? 1 : 0,
         transition: "opacity 0.3s ease",
+        background: "transparent",
+        pointerEvents: "none",
       }}
     />
   );

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { toggleFavorite } from "../lib/favorites";
+import { trackFavorite, trackUnfavorite } from "../lib/analytics";
 
 interface FavoriteButtonProps {
   productId: string;
@@ -10,6 +11,7 @@ interface FavoriteButtonProps {
   size?: number; // Icon size in pixels
   onToggle?: (isFavorited: boolean) => void; // Callback for parent components
   variant?: "overlay" | "inline"; // overlay = circle with bg, inline = just icon
+  brandId?: string; // For analytics tracking
 }
 
 export default function FavoriteButton({
@@ -17,7 +19,8 @@ export default function FavoriteButton({
   initialIsFavorited,
   size = 24,
   onToggle,
-  variant = "overlay"
+  variant = "overlay",
+  brandId
 }: FavoriteButtonProps) {
   const [isFavorited, setIsFavorited] = useState(initialIsFavorited);
   const [isLoading, setIsLoading] = useState(false);
@@ -75,6 +78,14 @@ export default function FavoriteButton({
       console.error("Failed to toggle favorite:", result.error);
       alert("Failed to update favorites. Please try again.");
     } else {
+      // Track analytics
+      if (brandId) {
+        if (newStatus) {
+          trackFavorite(brandId, productId);
+        } else {
+          trackUnfavorite(brandId, productId);
+        }
+      }
       // Call onToggle callback if provided
       onToggle?.(newStatus);
     }

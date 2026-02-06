@@ -17,6 +17,7 @@ interface Product {
   price: number;
   currency: string;
   created_at?: string;
+  brand_id?: string;
   brand?: {
     name: string;
     slug: string;
@@ -203,6 +204,7 @@ function ProductCard({ product, isNew, isFavorited = false }: { product: Product
             initialIsFavorited={isFavorited}
             size={16}
             variant="inline"
+            brandId={product.brand_id}
           />
         </div>
       </div>
@@ -255,6 +257,7 @@ export default function Home() {
           price,
           currency,
           created_at,
+          brand_id,
           brands(name, slug, logo_url, country),
           product_images(image_url, is_main, display_order),
           product_sizes(size, in_stock)

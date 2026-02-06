@@ -1,13 +1,65 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+interface ShopifyData {
+  name: string;
+  logo: string | null;
+  domain: string;
+}
+
 export default function BecomeSellerPage() {
   const router = useRouter();
+  const [shopifyUrl, setShopifyUrl] = useState("");
+  const [shopifyData, setShopifyData] = useState<ShopifyData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function parseShopifyUrl() {
+    if (!shopifyUrl.trim()) {
+      setError("Please enter a Shopify store URL");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setShopifyData(null);
+
+    try {
+      const res = await fetch("/api/shopify/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: shopifyUrl }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Failed to parse store");
+        return;
+      }
+
+      setShopifyData(data.data);
+    } catch (err) {
+      setError("Failed to connect to server");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function goToSignup() {
-    router.push("/signup");
+    if (shopifyData) {
+      const params = new URLSearchParams();
+      params.set("brandName", shopifyData.name);
+      if (shopifyData.logo) {
+        params.set("brandLogo", shopifyData.logo);
+      }
+      router.push(`/signup?${params.toString()}`);
+    } else {
+      router.push("/signup");
+    }
   }
 
   return (
@@ -67,6 +119,137 @@ export default function BecomeSellerPage() {
         >
           BECOME A SELLER
         </button>
+      </section>
+
+      {/* Shopify Import Section */}
+      <section style={{ padding: "60px 24px", background: "#fff", borderBottom: "1px solid #e6e6e6" }}>
+        <div style={{ maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
+          <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 12, letterSpacing: 0.5 }}>
+            ALREADY HAVE A SHOPIFY STORE?
+          </h2>
+          <p style={{ fontSize: 14, color: "#666", marginBottom: 24, lineHeight: 1.6 }}>
+            Paste your Shopify store URL to automatically import your brand name and logo
+          </p>
+
+          <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+            <input
+              type="text"
+              placeholder="yourstore.myshopify.com or yourstore.com"
+              value={shopifyUrl}
+              onChange={(e) => {
+                setShopifyUrl(e.target.value);
+                setError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") parseShopifyUrl();
+              }}
+              style={{
+                flex: 1,
+                padding: "14px 16px",
+                border: "1px solid #e6e6e6",
+                borderRadius: 8,
+                fontSize: 14,
+              }}
+            />
+            <button
+              onClick={parseShopifyUrl}
+              disabled={loading}
+              style={{
+                padding: "14px 24px",
+                background: loading ? "#999" : "#000",
+                color: "#fff",
+                border: "none",
+                borderRadius: 8,
+                fontWeight: 600,
+                fontSize: 14,
+                cursor: loading ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {loading ? "Loading..." : "Import"}
+            </button>
+          </div>
+
+          {error && (
+            <div style={{
+              padding: 12,
+              background: "#fff3f3",
+              border: "1px solid #fecaca",
+              borderRadius: 8,
+              fontSize: 13,
+              color: "#dc2626",
+              marginBottom: 16,
+            }}>
+              {error}
+            </div>
+          )}
+
+          {shopifyData && (
+            <div style={{
+              padding: 24,
+              background: "#f9fafb",
+              borderRadius: 12,
+              border: "1px solid #e5e7eb",
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              textAlign: "left",
+            }}>
+              {shopifyData.logo ? (
+                <img
+                  src={shopifyData.logo}
+                  alt={shopifyData.name}
+                  style={{
+                    width: 64,
+                    height: 64,
+                    objectFit: "contain",
+                    borderRadius: 8,
+                    background: "#fff",
+                    border: "1px solid #e6e6e6",
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: 64,
+                  height: 64,
+                  background: "#000",
+                  borderRadius: 8,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#fff",
+                  fontSize: 24,
+                  fontWeight: 800,
+                }}>
+                  {shopifyData.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
+                  {shopifyData.name}
+                </div>
+                <div style={{ fontSize: 12, color: "#666" }}>
+                  {shopifyData.domain}
+                </div>
+              </div>
+              <button
+                onClick={goToSignup}
+                style={{
+                  padding: "12px 24px",
+                  background: "#000",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                Continue
+              </button>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* How It Works */}

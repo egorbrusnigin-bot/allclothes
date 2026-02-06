@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabase";
 import { getCountryFlag } from "../../lib/countryFlags";
 import { getFavoritedProductIds } from "../../lib/favorites";
 import { formatPrice } from "../../lib/currency";
+import { trackBrandPageView, getBrandAnalytics } from "../../lib/analytics";
 import FavoriteButton from "../../components/FavoriteButton";
 import QuickAddButton from "../../components/QuickAddButton";
 import LoadingLogo from "../../components/LoadingLogo";
@@ -19,6 +20,32 @@ interface Brand {
   city: string | null;
   logo_url: string | null;
   description: string | null;
+  balance?: number;
+  total_sales?: number;
+  total_orders?: number;
+  page_views?: number;
+  product_views?: number;
+  total_favorites?: number;
+  owner_id?: string;
+}
+
+interface BrandAnalytics {
+  brand: Brand;
+  salesRank: number;
+  totalBrands: number;
+  history: Array<{
+    date: string;
+    page_views: number;
+    product_views: number;
+    favorites: number;
+    orders: number;
+    sales: number;
+  }>;
+  trends: {
+    pageViewsChange: number;
+    productViewsChange: number;
+    salesChange: number;
+  };
 }
 
 interface Product {
@@ -39,12 +66,13 @@ interface Product {
   }>;
 }
 
-function ProductCard({ product, isNew, isFavorited = false, brandName, brandCountry }: {
+function ProductCard({ product, isNew, isFavorited = false, brandName, brandCountry, brandId }: {
   product: Product;
   isNew: boolean;
   isFavorited?: boolean;
   brandName: string;
   brandCountry: string | null;
+  brandId: string;
 }) {
   const allImages = (product.product_images || [])
     .sort((a, b) => a.display_order - b.display_order)
@@ -200,6 +228,7 @@ function ProductCard({ product, isNew, isFavorited = false, brandName, brandCoun
             initialIsFavorited={isFavorited}
             size={16}
             variant="inline"
+            brandId={brandId}
           />
         </div>
       </div>
@@ -216,6 +245,8 @@ export default function BrandPage() {
   const [loading, setLoading] = useState(true);
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
   const [, setCurrencyUpdate] = useState(0);
+  const [analytics, setAnalytics] = useState<BrandAnalytics | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
     if (slug) {
@@ -249,6 +280,20 @@ export default function BrandPage() {
     }
 
     setBrand(brandData);
+
+    // Track page view
+    trackBrandPageView(brandData.id);
+
+    // Check if current user is the brand owner
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && brandData.owner_id === user.id) {
+      setIsOwner(true);
+      // Fetch analytics for brand owner
+      const analyticsData = await getBrandAnalytics(brandData.id);
+      if (analyticsData) {
+        setAnalytics(analyticsData);
+      }
+    }
 
     const { data: productsData, error: productsError } = await supabase
       .from("products")
@@ -362,6 +407,111 @@ export default function BrandPage() {
         </div>
       </div>
 
+      {/* Analytics Dashboard for Brand Owner */}
+      {isOwner && analytics && (
+        <div style={{
+          background: "#f9f9f9",
+          padding: 24,
+          marginBottom: 32,
+          border: "1px solid #e6e6e6"
+        }}>
+          <div style={{
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 1,
+            textTransform: "uppercase",
+            color: "#666",
+            marginBottom: 20
+          }}>
+            YOUR BRAND ANALYTICS
+          </div>
+
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+            gap: 16,
+            marginBottom: 20
+          }}>
+            <div style={{ background: "#fff", padding: 16, border: "1px solid #e6e6e6" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>
+                €{((analytics.brand.balance || 0) / 100).toFixed(2)}
+              </div>
+              <div style={{ fontSize: 10, color: "#999", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Balance
+              </div>
+            </div>
+
+            <div style={{ background: "#fff", padding: 16, border: "1px solid #e6e6e6" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>
+                #{analytics.salesRank}
+                <span style={{ fontSize: 12, color: "#999", fontWeight: 400 }}>/{analytics.totalBrands}</span>
+              </div>
+              <div style={{ fontSize: 10, color: "#999", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Sales Rank
+              </div>
+            </div>
+
+            <div style={{ background: "#fff", padding: 16, border: "1px solid #e6e6e6" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>
+                {analytics.brand.total_orders || 0}
+              </div>
+              <div style={{ fontSize: 10, color: "#999", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Orders
+              </div>
+            </div>
+
+            <div style={{ background: "#fff", padding: 16, border: "1px solid #e6e6e6" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>
+                €{((analytics.brand.total_sales || 0) / 100).toFixed(2)}
+              </div>
+              <div style={{ fontSize: 10, color: "#999", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Total Sales
+              </div>
+            </div>
+
+            <div style={{ background: "#fff", padding: 16, border: "1px solid #e6e6e6" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>
+                {analytics.brand.page_views || 0}
+              </div>
+              <div style={{ fontSize: 10, color: "#999", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Page Views
+              </div>
+            </div>
+
+            <div style={{ background: "#fff", padding: 16, border: "1px solid #e6e6e6" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>
+                {analytics.brand.product_views || 0}
+              </div>
+              <div style={{ fontSize: 10, color: "#999", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Product Views
+              </div>
+            </div>
+
+            <div style={{ background: "#fff", padding: 16, border: "1px solid #e6e6e6" }}>
+              <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>
+                {analytics.brand.total_favorites || 0}
+              </div>
+              <div style={{ fontSize: 10, color: "#999", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Favorites
+              </div>
+            </div>
+          </div>
+
+          {/* Trends */}
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 11, color: "#666" }}>
+              <span style={{ fontWeight: 600 }}>7-day trends:</span>
+            </div>
+            <div style={{ fontSize: 11, color: analytics.trends.pageViewsChange >= 0 ? "#22c55e" : "#ef4444" }}>
+              Views: {analytics.trends.pageViewsChange >= 0 ? "+" : ""}{analytics.trends.pageViewsChange.toFixed(0)}%
+            </div>
+            <div style={{ fontSize: 11, color: analytics.trends.salesChange >= 0 ? "#22c55e" : "#ef4444" }}>
+              Sales: {analytics.trends.salesChange >= 0 ? "+" : ""}{analytics.trends.salesChange.toFixed(0)}%
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Divider */}
       <div style={{ borderTop: "1px solid #e6e6e6", marginBottom: 24 }} />
 
@@ -385,6 +535,7 @@ export default function BrandPage() {
               isFavorited={favoritedIds.has(product.id)}
               brandName={brand.name}
               brandCountry={brand.country}
+              brandId={brand.id}
             />
           ))}
         </section>

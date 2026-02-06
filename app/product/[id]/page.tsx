@@ -7,6 +7,7 @@ import { getCountryFlag } from "../../lib/countryFlags";
 import { isProductFavorited } from "../../lib/favorites";
 import { addToCart, addToRecentlyViewed } from "../../lib/cart";
 import { formatPrice } from "../../lib/currency";
+import { trackProductView } from "../../lib/analytics";
 import FavoriteButton from "../../components/FavoriteButton";
 import LoadingLogo from "../../components/LoadingLogo";
 
@@ -23,6 +24,7 @@ interface Product {
   shipping_info: string | null;
   care_instructions: string | null;
   contact_info: string | null;
+  brand_id?: string;
   brand?: {
     name: string;
     slug: string;
@@ -86,6 +88,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
         shipping_info,
         care_instructions,
         contact_info,
+        brand_id,
         brands(name, slug, logo_url, country),
         product_images(image_url, is_main, display_order),
         product_sizes(size, in_stock, quantity)
@@ -114,12 +117,18 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       shipping_info: productData.shipping_info,
       care_instructions: productData.care_instructions,
       contact_info: productData.contact_info,
+      brand_id: productData.brand_id,
       brand: Array.isArray(productData.brands) ? productData.brands[0] : productData.brands,
       product_images: productData.product_images,
       product_sizes: productData.product_sizes
     };
 
     setProduct(transformedProduct);
+
+    // Track product view for analytics
+    if (productData.brand_id) {
+      trackProductView(productData.brand_id, productData.id);
+    }
 
     // Check if product is favorited
     const favorited = await isProductFavorited(productData.id);
@@ -321,6 +330,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
                 initialIsFavorited={isFavorited}
                 size={20}
                 onToggle={(newStatus) => setIsFavorited(newStatus)}
+                brandId={product.brand_id}
               />
             </div>
           </div>

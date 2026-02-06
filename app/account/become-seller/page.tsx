@@ -1,20 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type StepNum = 1 | 2 | 3;
 
 export default function Page() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>Loading...</div>}>
+      <BecomeSellerContent />
+    </Suspense>
+  );
+}
+
+function BecomeSellerContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<StepNum>(1);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [isAlreadySeller, setIsAlreadySeller] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [importedFromShopify, setImportedFromShopify] = useState(false);
 
   // Form data
   const [brandName, setBrandName] = useState("");
@@ -25,6 +35,20 @@ export default function Page() {
   const [socialHandle, setSocialHandle] = useState("");
   const [paypalEmail, setPaypalEmail] = useState("");
   const [legalName, setLegalName] = useState("");
+
+  // Load imported brand data from URL params
+  useEffect(() => {
+    const importedName = searchParams.get("brandName");
+    const importedLogo = searchParams.get("brandLogo");
+
+    if (importedName) {
+      setBrandName(importedName);
+      setImportedFromShopify(true);
+    }
+    if (importedLogo) {
+      setLogoUrl(importedLogo);
+    }
+  }, [searchParams]);
 
   // animation state for content
   const [entered, setEntered] = useState(false);
@@ -306,6 +330,30 @@ export default function Page() {
       >
         {step === 1 && (
           <>
+            {/* Imported from Shopify indicator */}
+            {importedFromShopify && (
+              <div style={{
+                padding: 16,
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+                borderRadius: 8,
+                marginBottom: 24,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+              }}>
+                <div style={{ fontSize: 20 }}>✓</div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#166534" }}>
+                    Imported from Shopify
+                  </div>
+                  <div style={{ fontSize: 11, color: "#15803d" }}>
+                    Your brand info has been pre-filled. You can edit if needed.
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Logo */}
             <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>LOGO</div>
             <div style={{ color: "#777", fontSize: 10, marginBottom: 14, letterSpacing: 0.3 }}>

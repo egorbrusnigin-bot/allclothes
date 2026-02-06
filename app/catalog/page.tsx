@@ -18,6 +18,7 @@ interface Product {
   currency: string;
   category: string | null;
   created_at?: string;
+  brand_id?: string;
   brand?: {
     name: string;
     slug: string;
@@ -35,7 +36,7 @@ interface Product {
   }>;
 }
 
-function ProductCard({ product, isNew, isFavorited = false }: { product: Product; isNew: boolean; isFavorited?: boolean }) {
+function ProductCard({ product, isNew, isFavorited = false }: { product: Product; isNew: boolean; isFavorited?: boolean; }) {
   const allImages = (product.product_images || [])
     .sort((a, b) => a.display_order - b.display_order)
     .map(img => img.image_url);
@@ -192,6 +193,7 @@ function ProductCard({ product, isNew, isFavorited = false }: { product: Product
             initialIsFavorited={isFavorited}
             size={16}
             variant="inline"
+            brandId={product.brand_id}
           />
         </div>
       </div>
@@ -247,6 +249,7 @@ export default function CatalogPage() {
         currency,
         category,
         created_at,
+        brand_id,
         brands(name, slug, logo_url, country),
         product_images(image_url, is_main, display_order),
         product_sizes(size, in_stock)

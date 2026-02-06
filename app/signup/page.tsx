@@ -1,14 +1,45 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import Link from "next/link";
 
+interface ImportedBrand {
+  name: string;
+  logo: string | null;
+}
+
 export default function SignupPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>Loading...</div>}>
+      <SignupContent />
+    </Suspense>
+  );
+}
+
+function SignupContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [accountType, setAccountType] = useState<"buyer" | "seller" | null>(null);
+  const [importedBrand, setImportedBrand] = useState<ImportedBrand | null>(null);
+
+  // Check for imported brand data from Shopify
+  useEffect(() => {
+    const brandName = searchParams.get("brandName");
+    const brandLogo = searchParams.get("brandLogo");
+
+    if (brandName) {
+      setImportedBrand({
+        name: brandName,
+        logo: brandLogo,
+      });
+      // Auto-select seller account type
+      setAccountType("seller");
+      setStep(2);
+    }
+  }, [searchParams]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
@@ -127,7 +158,17 @@ export default function SignupPage() {
     // Success - redirect
     setStatus("");
     if (accountType === "seller") {
-      router.push("/account/become-seller");
+      // Pass imported brand data if available
+      if (importedBrand) {
+        const params = new URLSearchParams();
+        params.set("brandName", importedBrand.name);
+        if (importedBrand.logo) {
+          params.set("brandLogo", importedBrand.logo);
+        }
+        router.push(`/account/become-seller?${params.toString()}`);
+      } else {
+        router.push("/account/become-seller");
+      }
     } else {
       router.push("/");
     }
@@ -219,9 +260,78 @@ export default function SignupPage() {
           </h1>
           <p style={{ fontSize: 14, color: "#666", marginBottom: 32 }}>
             {step === 1 && "Choose your account type to get started"}
-            {step === 2 && "Enter your details to create your account"}
+            {step === 2 && (importedBrand ? "Complete your account to start selling" : "Enter your details to create your account")}
             {step === 3 && `We sent a verification code to ${email}`}
           </p>
+
+          {/* Imported Brand Preview */}
+          {importedBrand && step === 2 && (
+            <div style={{
+              padding: 16,
+              background: "#f0fdf4",
+              border: "1px solid #bbf7d0",
+              borderRadius: 8,
+              marginBottom: 24,
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+            }}>
+              {importedBrand.logo ? (
+                <img
+                  src={importedBrand.logo}
+                  alt={importedBrand.name}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    objectFit: "contain",
+                    borderRadius: 6,
+                    background: "#fff",
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: 40,
+                  height: 40,
+                  background: "#000",
+                  borderRadius: 6,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#fff",
+                  fontSize: 16,
+                  fontWeight: 700,
+                }}>
+                  {importedBrand.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#166534" }}>
+                  {importedBrand.name}
+                </div>
+                <div style={{ fontSize: 11, color: "#15803d" }}>
+                  Imported from Shopify
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setImportedBrand(null);
+                  setAccountType(null);
+                  setStep(1);
+                  // Clear URL params
+                  router.replace("/signup");
+                }}
+                style={{
+                  all: "unset",
+                  cursor: "pointer",
+                  fontSize: 18,
+                  color: "#666",
+                  padding: 4,
+                }}
+              >
+                ×
+              </button>
+            </div>
+          )}
 
           {/* Step 1: Account Type Selection */}
           {step === 1 ? (
