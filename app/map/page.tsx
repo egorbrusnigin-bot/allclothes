@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { supabase } from "../lib/supabase";
-import "leaflet/dist/leaflet.css";
-
 // Dynamically import map component to avoid SSR issues
 const MapComponent = dynamic(() => import("./MapComponent"), {
   ssr: false,

@@ -30,9 +30,9 @@ export default function MapComponent({ brands }: MapComponentProps) {
   const [viewState, setViewState] = useState({
     longitude: 15.0, // Центр Европы
     latitude: 50.0,
-    zoom: 3.5, // Широкий обзор
-    pitch: 60, // 3D наклон
-    bearing: -17, // Поворот
+    zoom: 2.5,
+    pitch: 0,
+    bearing: 0,
   });
 
   // Попап рендерится сразу, но будет невидимым из-за CSS анимации
@@ -52,9 +52,29 @@ export default function MapComponent({ brands }: MapComponentProps) {
       onMove={(evt) => setViewState(evt.viewState)}
       style={{ height: "calc(100vh - 300px)", minHeight: 500, width: "100%" }}
       mapStyle={mapStyle}
+      projection="globe"
     >
       {brands.map((brand) => {
         if (!brand.latitude || !brand.longitude) return null;
+
+        // Fade out markers near the edge of the globe
+        const toRad = (d: number) => (d * Math.PI) / 180;
+        const dLat = toRad(brand.latitude - viewState.latitude);
+        const dLng = toRad(brand.longitude - viewState.longitude);
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos(toRad(viewState.latitude)) *
+            Math.cos(toRad(brand.latitude)) *
+            Math.sin(dLng / 2) ** 2;
+        const angularDist = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        if (angularDist > Math.PI / 2) return null;
+
+        // Smooth fade: full opacity at center, fade near edges
+        const fadeStart = 1.1; // start fading at ~63°
+        const fadeEnd = Math.PI / 2; // fully hidden at 90°
+        const opacity = angularDist < fadeStart
+          ? 1
+          : 1 - (angularDist - fadeStart) / (fadeEnd - fadeStart);
 
         return (
           <Marker
@@ -79,7 +99,8 @@ export default function MapComponent({ brands }: MapComponentProps) {
                 alignItems: "center",
                 justifyContent: "center",
                 boxShadow: "0 2px 12px rgba(0, 0, 0, 0.6)",
-                transition: "all 0.2s ease",
+                transition: "opacity 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease",
+                opacity: Math.max(0, opacity),
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = "scale(1.15)";
@@ -130,77 +151,89 @@ export default function MapComponent({ brands }: MapComponentProps) {
             style={{
               textDecoration: "none",
               color: "inherit",
-              display: "block",
-              padding: 8,
-              width: 160,
-              maxWidth: 160,
-              transition: "all 0.2s ease",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "12px 14px",
+              width: 240,
+              maxWidth: 240,
+              transition: "background 0.2s ease",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(0, 0, 0, 0.02)";
-              const arrow = e.currentTarget.querySelector(".popup-arrow");
-              if (arrow) (arrow as HTMLElement).style.color = "#000";
+              e.currentTarget.style.background = "rgba(0, 0, 0, 0.03)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = "transparent";
-              const arrow = e.currentTarget.querySelector(".popup-arrow");
-              if (arrow) (arrow as HTMLElement).style.color = "#666";
             }}
           >
-            <div style={{
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: 0.5,
-              textTransform: "uppercase",
-              marginBottom: 4,
-              color: "#000",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis"
-            }}>
-              {selectedBrand.name}
-            </div>
-
-            {selectedBrand.city && (
+            {selectedBrand.logo_url ? (
+              <img
+                src={selectedBrand.logo_url}
+                alt={selectedBrand.name}
+                style={{
+                  width: 44,
+                  height: 44,
+                  objectFit: "contain",
+                  borderRadius: 8,
+                  flexShrink: 0,
+                  background: "#f5f5f5",
+                  padding: 4,
+                }}
+              />
+            ) : (
               <div style={{
-                fontSize: 9,
-                color: "#666",
-                marginBottom: 8,
-                letterSpacing: 0.3,
+                width: 44,
+                height: 44,
+                borderRadius: 8,
+                background: "#000",
+                color: "#fff",
                 display: "flex",
                 alignItems: "center",
-                gap: 3,
+                justifyContent: "center",
+                fontSize: 18,
+                fontWeight: 700,
+                flexShrink: 0,
+              }}>
+                {selectedBrand.name.charAt(0)}
+              </div>
+            )}
+
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: 0.3,
+                textTransform: "uppercase",
+                marginBottom: 3,
+                color: "#000",
                 whiteSpace: "nowrap",
                 overflow: "hidden",
-                textOverflow: "ellipsis"
+                textOverflow: "ellipsis",
               }}>
-                {selectedBrand.city}, {selectedBrand.country} {selectedBrand.country && getCountryFlag(selectedBrand.country)}
+                {selectedBrand.name}
               </div>
-            )}
 
-            {selectedBrand.description && (
+              {selectedBrand.city && (
+                <div style={{
+                  fontSize: 10,
+                  color: "#888",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 3,
+                  marginBottom: 4,
+                }}>
+                  {selectedBrand.city}, {selectedBrand.country} {selectedBrand.country && getCountryFlag(selectedBrand.country)}
+                </div>
+              )}
+
               <div style={{
-                fontSize: 9,
-                color: "#999",
-                lineHeight: 1.5,
-                marginBottom: 8
+                fontSize: 10,
+                fontWeight: 600,
+                color: "#000",
+                opacity: 0.5,
               }}>
-                {selectedBrand.description.length > 50
-                  ? selectedBrand.description.slice(0, 50) + "..."
-                  : selectedBrand.description}
+                View brand →
               </div>
-            )}
-
-            <div
-              className="popup-arrow"
-              style={{
-                fontSize: 12,
-                fontWeight: 400,
-                color: "#666",
-                transition: "color 0.2s ease"
-              }}
-            >
-              →
             </div>
           </Link>
         </Popup>
@@ -224,12 +257,13 @@ export default function MapComponent({ brands }: MapComponentProps) {
         .maplibregl-popup-content,
         .mapboxgl-popup-content {
           padding: 0 !important;
-          border-radius: 2px !important;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
-          background: rgba(255, 255, 255, 0.98) !important;
+          border-radius: 12px !important;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0,0,0,0.1) !important;
+          background: #fff !important;
           backdrop-filter: blur(20px) !important;
           -webkit-backdrop-filter: blur(20px) !important;
-          border: 1px solid rgba(0, 0, 0, 0.15) !important;
+          border: 1px solid rgba(0, 0, 0, 0.08) !important;
+          overflow: hidden !important;
           transition: all 0.2s ease !important;
         }
 

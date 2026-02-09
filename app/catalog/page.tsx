@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { getCountryFlag } from "../lib/countryFlags";
@@ -9,6 +9,79 @@ import { formatPrice } from "../lib/currency";
 import FavoriteButton from "../components/FavoriteButton";
 import QuickAddButton from "../components/QuickAddButton";
 import LoadingLogo from "../components/LoadingLogo";
+
+// Fuzzy search - Levenshtein distance
+function levenshteinDistance(a: string, b: string): number {
+  const matrix: number[][] = [];
+
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
+
+// Calculate fuzzy match score (0-1, higher is better)
+function fuzzyMatch(query: string, text: string): number {
+  const q = query.toLowerCase().trim();
+  const t = text.toLowerCase();
+
+  // Exact match
+  if (t.includes(q)) return 1;
+
+  // Check each word in text
+  const words = t.split(/\s+/);
+  let bestScore = 0;
+
+  for (const word of words) {
+    // Starts with query
+    if (word.startsWith(q)) {
+      bestScore = Math.max(bestScore, 0.95);
+      continue;
+    }
+
+    // Levenshtein distance for short queries (typo tolerance)
+    if (q.length >= 2) {
+      const distance = levenshteinDistance(q, word.substring(0, Math.max(q.length + 2, word.length)));
+      const maxLen = Math.max(q.length, word.length);
+      const similarity = 1 - (distance / maxLen);
+
+      // Allow up to 2 typos for words >= 4 chars, 1 typo for shorter
+      const maxTypos = q.length >= 4 ? 2 : 1;
+      if (distance <= maxTypos) {
+        bestScore = Math.max(bestScore, similarity * 0.8);
+      }
+    }
+  }
+
+  // Also check full text similarity for multi-word queries
+  if (q.includes(" ")) {
+    const distance = levenshteinDistance(q, t.substring(0, q.length + 5));
+    const similarity = 1 - (distance / Math.max(q.length, t.length));
+    if (similarity > 0.6) {
+      bestScore = Math.max(bestScore, similarity * 0.7);
+    }
+  }
+
+  return bestScore;
+}
 
 interface Product {
   id: string;
@@ -36,11 +109,18 @@ interface Product {
   }>;
 }
 
-function ProductCard({ product, isNew, isFavorited = false }: { product: Product; isNew: boolean; isFavorited?: boolean; }) {
+function ProductCard({ product, isNew, isFavorited = false, index = 0 }: { product: Product; isNew: boolean; isFavorited?: boolean; index?: number; }) {
   const allImages = (product.product_images || [])
     .sort((a, b) => a.display_order - b.display_order)
     .map(img => img.image_url);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Stagger animation - each card appears slightly after the previous
+    const timer = setTimeout(() => setIsVisible(true), Math.min(index * 30, 300));
+    return () => clearTimeout(timer);
+  }, [index]);
 
   const mainImage = allImages[0] || "";
 
@@ -56,7 +136,13 @@ function ProductCard({ product, isNew, isFavorited = false }: { product: Product
   };
 
   return (
-    <div>
+    <div
+      style={{
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "translateY(0)" : "translateY(8px)",
+        transition: "opacity 0.2s ease, transform 0.2s ease"
+      }}
+    >
       <div
         style={{ position: "relative", marginBottom: 10 }}
         onMouseMove={handleMouseMove}
@@ -67,14 +153,22 @@ function ProductCard({ product, isNew, isFavorited = false }: { product: Product
           style={{ textDecoration: "none", color: "black" }}
         >
           {allImages.length > 0 ? (
-            <img
-              src={allImages[currentImageIndex]}
-              alt={product.name}
-              style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", display: "block", userSelect: "none" }}
-              draggable={false}
-              loading="lazy"
-              decoding="async"
-            />
+            <div style={{ width: "100%", aspectRatio: "3/4", background: "#f8f8f8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <img
+                src={allImages[currentImageIndex]}
+                alt={product.name}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  display: "block",
+                  userSelect: "none"
+                }}
+                draggable={false}
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
           ) : (
             <div style={{ width: "100%", aspectRatio: "3/4", background: "#f5f5f5" }} />
           )}
@@ -207,6 +301,19 @@ export default function CatalogPage() {
   const [sortBy, setSortBy] = useState<string>("NEW");
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
 
+  // Search state with debounce
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  // Debounce search (short delay for snappy feel)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   // Dropdown states
   const [showBrandFilter, setShowBrandFilter] = useState(false);
   const [showSizeFilter, setShowSizeFilter] = useState(false);
@@ -276,25 +383,40 @@ export default function CatalogPage() {
     setLoading(false);
   }
 
-  // Filter products
-  const filteredProducts = products.filter(product => {
-    if (selectedBrands.length > 0 && !selectedBrands.includes(product.brand?.name || "")) {
-      return false;
-    }
+  // Filter products with fuzzy search
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => {
+      // Fuzzy search filter
+      if (searchQuery.trim()) {
+        const brandName = product.brand?.name || "";
+        const productName = product.name || "";
 
-    if (selectedSizes.length > 0) {
-      const productSizes = product.product_sizes?.map(s => s.size) || [];
-      if (!selectedSizes.some(size => productSizes.includes(size))) {
+        const brandScore = fuzzyMatch(searchQuery, brandName);
+        const productScore = fuzzyMatch(searchQuery, productName);
+        const bestScore = Math.max(brandScore, productScore);
+
+        // Require at least 0.5 match score
+        if (bestScore < 0.5) return false;
+      }
+
+      if (selectedBrands.length > 0 && !selectedBrands.includes(product.brand?.name || "")) {
         return false;
       }
-    }
 
-    const price = product.price;
-    if (minPrice && price < parseFloat(minPrice)) return false;
-    if (maxPrice && price > parseFloat(maxPrice)) return false;
+      if (selectedSizes.length > 0) {
+        const productSizes = product.product_sizes?.map(s => s.size) || [];
+        if (!selectedSizes.some(size => productSizes.includes(size))) {
+          return false;
+        }
+      }
 
-    return true;
-  });
+      const price = product.price;
+      if (minPrice && price < parseFloat(minPrice)) return false;
+      if (maxPrice && price > parseFloat(maxPrice)) return false;
+
+      return true;
+    });
+  }, [products, searchQuery, selectedBrands, selectedSizes, minPrice, maxPrice]);
 
   // Sort products
   const sortedProducts = [...filteredProducts].sort((a, b) => {
@@ -339,6 +461,74 @@ export default function CatalogPage() {
         alignItems: "center",
         flexWrap: "wrap"
       }}>
+
+        {/* Search */}
+        <div style={{ position: "relative" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              borderBottom: isSearchFocused || searchInput ? "1px solid #000" : "1px solid transparent",
+              paddingBottom: 4,
+              transition: "all 0.2s ease"
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              style={{ opacity: isSearchFocused || searchInput ? 1 : 0.4, transition: "opacity 0.2s" }}
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" />
+            </svg>
+            <input
+              type="text"
+              placeholder="SEARCH"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+              style={{
+                border: "none",
+                outline: "none",
+                background: "transparent",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+                width: isSearchFocused || searchInput ? 180 : 60,
+                transition: "width 0.3s ease",
+                color: "#000"
+              }}
+            />
+            {searchInput && (
+              <button
+                onClick={() => {
+                  setSearchInput("");
+                  setSearchQuery("");
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  fontSize: 10,
+                  color: "#999",
+                  lineHeight: 1
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        <span style={{ color: "#e6e6e6" }}>|</span>
 
         {/* Sort Button */}
         <button
@@ -554,13 +744,15 @@ export default function CatalogPage() {
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "#ccc" }}>GENDER</span>
 
         {/* Clear All */}
-        {(selectedBrands.length > 0 || selectedSizes.length > 0 || minPrice || maxPrice) && (
+        {(selectedBrands.length > 0 || selectedSizes.length > 0 || minPrice || maxPrice || searchInput) && (
           <button
             onClick={() => {
               setSelectedBrands([]);
               setSelectedSizes([]);
               setMinPrice("");
               setMaxPrice("");
+              setSearchInput("");
+              setSearchQuery("");
             }}
             style={{
               padding: 0,
@@ -579,6 +771,13 @@ export default function CatalogPage() {
             CLEAR ALL
           </button>
         )}
+
+        {/* Search results info */}
+        {searchQuery && (
+          <span style={{ fontSize: 11, color: "#666", fontWeight: 500, letterSpacing: 0.5 }}>
+            {filteredProducts.length} RESULT{filteredProducts.length !== 1 ? "S" : ""}
+          </span>
+        )}
       </div>
 
       {/* Products Grid */}
@@ -588,12 +787,13 @@ export default function CatalogPage() {
         </div>
       ) : (
         <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, rowGap: 40 }}>
-          {sortedProducts.map((product) => (
+          {sortedProducts.map((product, idx) => (
             <ProductCard
-              key={product.id}
+              key={`${product.id}-${searchQuery}`}
               product={product}
               isNew={isNew(product)}
               isFavorited={favoritedIds.has(product.id)}
+              index={idx}
             />
           ))}
         </section>

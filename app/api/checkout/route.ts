@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "../../lib/supabaseAdmin";
+import Stripe from "stripe";
+
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeSecretKey
+  ? new Stripe(stripeSecretKey, { apiVersion: "2024-12-18.acacia" })
+  : null;
 
 interface CartItem {
   productId: string;
@@ -15,6 +21,14 @@ interface CartItem {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if Stripe is configured
+    if (!stripe) {
+      return NextResponse.json(
+        { error: "Payment system is not configured. Please contact support." },
+        { status: 503 }
+      );
+    }
+
     // ── 1. Auth ─────────────────────────────────────────
     const token = request.headers.get("Authorization")?.replace("Bearer ", "");
     if (!token) {
@@ -48,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     const { data: products, error: prodErr } = await supabaseAdmin
       .from("products")
-      .select("id, price, status")
+      .select("id, price, status, brand_id")
       .in("id", productIds);
 
     if (prodErr || !products) {
@@ -58,8 +72,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const priceMap = new Map(products.map((p: { id: string; price: number; status: string }) => [p.id, p]));
+    const priceMap = new Map(products.map((p) => [p.id, p]));
 
+    // Check all products and calculate total
+    const brandIds = new Set<string>();
     for (const item of cartItems) {
       const product = priceMap.get(item.productId);
       if (!product) {
@@ -75,49 +91,93 @@ export async function POST(request: NextRequest) {
         );
       }
       serverTotal += product.price * item.quantity;
+      if (product.brand_id) {
+        brandIds.add(product.brand_id);
+      }
     }
 
-    // ── 4. Create lava.top invoice ──────────────────────
-    const apiKey = process.env.LAVA_API_KEY;
-    const offerId = process.env.LAVA_OFFER_ID;
-
-    if (!apiKey || !offerId) {
+    // For now, we only support single-seller checkout
+    // TODO: Support multi-seller checkout with separate payment intents
+    if (brandIds.size > 1) {
       return NextResponse.json(
-        { error: "Payment system not configured" },
-        { status: 500 }
+        { error: "Cart contains items from multiple sellers. Please checkout separately." },
+        { status: 400 }
       );
     }
 
-    const currency = cartItems[0].currency;
+    const brandId = [...brandIds][0];
+    const currency = (cartItems[0].currency || "EUR").toLowerCase();
 
-    const invoiceRes = await fetch("https://api.lava.top/api/v3/invoice", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Api-Key": apiKey,
-      },
-      body: JSON.stringify({
+    // ── 4. Get seller's Stripe account ──────────────────
+    let stripeAccountId: string | null = null;
+    let sellerId: string | null = null;
+
+    if (brandId) {
+      const { data: brand } = await supabaseAdmin
+        .from("brands")
+        .select("owner_id")
+        .eq("id", brandId)
+        .single();
+
+      if (brand?.owner_id) {
+        const { data: seller } = await supabaseAdmin
+          .from("sellers")
+          .select("id, stripe_account_id, stripe_payouts_enabled")
+          .eq("user_id", brand.owner_id)
+          .single();
+
+        if (seller?.stripe_account_id && seller?.stripe_payouts_enabled) {
+          stripeAccountId = seller.stripe_account_id;
+          sellerId = seller.id;
+        }
+      }
+    }
+
+    // ── 5. Create Stripe Payment Intent ─────────────────
+    const amountInCents = Math.round(serverTotal * 100);
+    const platformFee = Math.round(amountInCents * 0.10); // 10% platform fee
+
+    // Prepare metadata (limited to 500 chars per value)
+    const cartItemsForMeta = cartItems.map(item => ({
+      productId: item.productId,
+      productName: item.productName.substring(0, 50),
+      brandName: item.brandName.substring(0, 30),
+      price: item.price,
+      currency: item.currency,
+      size: item.size,
+      quantity: item.quantity,
+      imageUrl: item.imageUrl?.substring(0, 100) || "",
+    }));
+
+    const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
+      amount: amountInCents,
+      currency,
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        user_id: user.id,
         email,
-        offerId,
-        currency,
-        amount: serverTotal,
-      }),
-    });
+        brand_id: brandId || "",
+        seller_id: sellerId || "",
+        cart_items: JSON.stringify(cartItemsForMeta),
+      },
+      receipt_email: email,
+    };
 
-    if (!invoiceRes.ok) {
-      const invoiceErr = await invoiceRes.text();
-      console.error("lava.top invoice error:", invoiceErr);
-      return NextResponse.json(
-        { error: "Payment provider error" },
-        { status: 502 }
-      );
+    // If seller has Stripe Connect, split the payment
+    if (stripeAccountId) {
+      paymentIntentParams.transfer_data = {
+        destination: stripeAccountId,
+      };
+      paymentIntentParams.application_fee_amount = platformFee;
     }
 
-    const invoice = await invoiceRes.json();
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
 
     return NextResponse.json({
-      invoiceId: invoice.id,
-      paymentUrl: invoice.paymentUrl,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      amount: serverTotal,
+      currency: currency.toUpperCase(),
     });
   } catch (err) {
     console.error("Checkout error:", err);

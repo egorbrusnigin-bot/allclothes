@@ -10,7 +10,6 @@ const baseItems = [
   { href: "/account/messages", label: "My messages" },
   { href: "/account/help", label: "Need help?" },
   { href: "/account/profile", label: "My details" },
-  { href: "/account/become-seller", label: "Become a seller" },
 ];
 
 const bottomItems = [
@@ -22,6 +21,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [isSeller, setIsSeller] = useState(false);
+  const [sellerStatus, setSellerStatus] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [userEmail, setUserEmail] = useState("");
@@ -56,8 +56,11 @@ export default function Sidebar() {
         .eq("user_id", user.id)
         .single();
 
-      if (sellerData && !sellerError && sellerData.status === "approved") {
-        setIsSeller(true);
+      if (sellerData && !sellerError) {
+        setSellerStatus(sellerData.status);
+        if (sellerData.status === "approved") {
+          setIsSeller(true);
+        }
       }
 
       // Check if admin
@@ -95,6 +98,12 @@ export default function Sidebar() {
   const roleItems = [];
   if (isSeller) {
     roleItems.push({ href: "/account/seller", label: "My Shop" });
+  } else if (sellerStatus === "pending") {
+    roleItems.push({ href: "/account/become-seller", label: "Application Pending" });
+  } else if (sellerStatus === "rejected") {
+    roleItems.push({ href: "/account/become-seller", label: "Application Rejected" });
+  } else {
+    roleItems.push({ href: "/account/become-seller", label: "Become a seller" });
   }
   if (isAdmin) {
     roleItems.push({ href: "/account/moderation", label: "Moderation" });

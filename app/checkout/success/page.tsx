@@ -1,50 +1,52 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
-import { getCartItems, clearCart, type CartItem } from "../../lib/cart";
+import { clearCart } from "../../lib/cart";
+import Link from "next/link";
 
-export default function CheckoutSuccessPage() {
+function SuccessContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [status, setStatus] = useState<"loading" | "pending" | "success" | "failed">("loading");
   const [attempts, setAttempts] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    confirm();
+    checkPayment();
   }, []);
 
-  // retry on pending status change
+  // Retry on pending status
   useEffect(() => {
     if (status === "pending" && attempts < 10) {
       timerRef.current = setTimeout(() => {
-        confirm();
-      }, 3000);
+        checkPayment();
+      }, 2000);
     }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [status, attempts]);
 
-  async function confirm() {
+  async function checkPayment() {
     if (!supabase) {
       router.push("/");
       return;
     }
 
-    const invoiceId = localStorage.getItem("lava_invoice_id");
-    if (!invoiceId) {
-      router.push("/");
-      return;
-    }
+    // Get Stripe redirect parameters
+    const paymentIntent = searchParams.get("payment_intent");
+    const redirectStatus = searchParams.get("redirect_status");
 
-    const cartItems = getCartItems();
-    if (cartItems.length === 0) {
-      // Cart was already cleared (e.g. page refresh after success)
-      // Check if we already have an order number stored
-      const savedOrder = localStorage.getItem("lava_order_number");
+    // Also check localStorage for payment intent ID (backup)
+    const storedPaymentIntent = localStorage.getItem("stripe_payment_intent");
+    const paymentIntentId = paymentIntent || storedPaymentIntent;
+
+    if (!paymentIntentId) {
+      // Check if we have a saved order number (page refresh after success)
+      const savedOrder = localStorage.getItem("stripe_order_number");
       if (savedOrder) {
         setOrderNumber(savedOrder);
         setStatus("success");
@@ -54,50 +56,68 @@ export default function CheckoutSuccessPage() {
       return;
     }
 
+    // If redirect status indicates failure
+    if (redirectStatus === "failed") {
+      setStatus("failed");
+      return;
+    }
+
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push("/?login=1");
-        return;
-      }
+      // Check payment status via API
+      const res = await fetch(`/api/stripe/payment-status?payment_intent=${paymentIntentId}`);
 
-      const res = await fetch("/api/checkout/confirm", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ invoiceId, cartItems }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setStatus("failed");
-        return;
-      }
-
-      // Order confirmed
-      if (data.orderNumber) {
-        setOrderNumber(data.orderNumber);
-        setStatus("success");
-        clearCart();
-        localStorage.removeItem("lava_invoice_id");
-        localStorage.setItem("lava_order_number", data.orderNumber);
-        return;
-      }
-
-      // Still processing
-      if (data.status === "NEW" || data.status === "IN_PROGRESS") {
+      // Check if response is JSON
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        // API not available or returned error, keep polling
         setAttempts((a) => a + 1);
         setStatus("pending");
         return;
       }
 
-      // Failed payment
-      setStatus("failed");
+      if (!res.ok) {
+        // If API doesn't exist yet, wait for webhook to process
+        setAttempts((a) => a + 1);
+        setStatus("pending");
+        return;
+      }
+
+      const data = await res.json();
+
+      if (data.status === "succeeded") {
+        if (data.orderNumber) {
+          setOrderNumber(data.orderNumber);
+          setStatus("success");
+          clearCart();
+          localStorage.removeItem("stripe_payment_intent");
+          localStorage.removeItem("checkout_cart_items");
+          localStorage.setItem("stripe_order_number", data.orderNumber);
+        } else {
+          // Payment succeeded but order not yet created (webhook processing)
+          setAttempts((a) => a + 1);
+          setStatus("pending");
+        }
+        return;
+      }
+
+      if (data.status === "processing" || data.status === "requires_action") {
+        setAttempts((a) => a + 1);
+        setStatus("pending");
+        return;
+      }
+
+      if (data.status === "requires_payment_method" || data.status === "canceled") {
+        setStatus("failed");
+        return;
+      }
+
+      // Unknown status, keep polling
+      setAttempts((a) => a + 1);
+      setStatus("pending");
     } catch {
-      setStatus("failed");
+      // Network error or API not available, keep polling
+      setAttempts((a) => a + 1);
+      setStatus("pending");
     }
   }
 
@@ -109,14 +129,14 @@ export default function CheckoutSuccessPage() {
         {isTooLong ? (
           <>
             <p style={{ fontSize: 13, color: "#999", margin: "0 0 24px" }}>
-              Payment is taking longer than expected.
+              Payment is being processed. This may take a moment.
             </p>
-            <a
+            <Link
               href="/account/orders"
               style={{ fontSize: 11, color: "#000", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}
             >
               CHECK MY ORDERS
-            </a>
+            </Link>
           </>
         ) : (
           <>
@@ -168,8 +188,8 @@ export default function CheckoutSuccessPage() {
           <p style={{ fontSize: 12, color: "#666", margin: "0 0 24px" }}>
             Your payment could not be processed. No charge has been made.
           </p>
-          <a
-            href="/"
+          <Link
+            href="/checkout"
             style={{
               display: "inline-block",
               padding: "10px 28px",
@@ -182,8 +202,8 @@ export default function CheckoutSuccessPage() {
               letterSpacing: 1,
             }}
           >
-            BACK TO CART
-          </a>
+            TRY AGAIN
+          </Link>
         </div>
       </div>
     );
@@ -230,33 +250,35 @@ export default function CheckoutSuccessPage() {
         </p>
 
         {/* order number */}
-        <div
-          style={{
-            textAlign: "center",
-            padding: "16px 0",
-            borderTop: "1px solid #ebebeb",
-            borderBottom: "1px solid #ebebeb",
-            marginBottom: 28,
-          }}
-        >
+        {orderNumber && (
           <div
             style={{
-              fontSize: 9,
-              fontWeight: 700,
-              letterSpacing: 1.5,
-              textTransform: "uppercase",
-              color: "#999",
-              marginBottom: 6,
+              textAlign: "center",
+              padding: "16px 0",
+              borderTop: "1px solid #ebebeb",
+              borderBottom: "1px solid #ebebeb",
+              marginBottom: 28,
             }}
           >
-            ORDER NUMBER
+            <div
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 1.5,
+                textTransform: "uppercase",
+                color: "#999",
+                marginBottom: 6,
+              }}
+            >
+              ORDER NUMBER
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>#{orderNumber}</div>
           </div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>#{orderNumber}</div>
-        </div>
+        )}
 
         {/* buttons */}
         <div style={{ display: "flex", gap: 12 }}>
-          <a
+          <Link
             href="/account/orders"
             style={{
               flex: 1,
@@ -274,8 +296,8 @@ export default function CheckoutSuccessPage() {
             }}
           >
             MY ORDERS
-          </a>
-          <a
+          </Link>
+          <Link
             href="/"
             style={{
               flex: 1,
@@ -293,9 +315,23 @@ export default function CheckoutSuccessPage() {
             }}
           >
             CONTINUE SHOPPING
-          </a>
+          </Link>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CheckoutSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ padding: "100px 24px", textAlign: "center" }}>
+        <p style={{ fontSize: 11, color: "#999", letterSpacing: 1, textTransform: "uppercase" }}>
+          LOADING...
+        </p>
+      </div>
+    }>
+      <SuccessContent />
+    </Suspense>
   );
 }

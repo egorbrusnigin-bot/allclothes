@@ -399,11 +399,9 @@ export default function BrandPage() {
             </div>
           )}
 
-          {brand.description && (
-            <p style={{ fontSize: 13, color: "#666", lineHeight: 1.6, maxWidth: 500, margin: 0 }}>
-              {brand.description}
-            </p>
-          )}
+          <p style={{ fontSize: 13, color: "#666", lineHeight: 1.6, maxWidth: 500, margin: 0 }}>
+            {brand.description || `We don't know much about ${brand.name} yet, but we're sure it's an amazing brand.`}
+          </p>
         </div>
       </div>
 
@@ -498,17 +496,19 @@ export default function BrandPage() {
           </div>
 
           {/* Trends */}
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 11, color: "#666" }}>
-              <span style={{ fontWeight: 600 }}>7-day trends:</span>
+          {analytics.trends && (
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 11, color: "#666" }}>
+                <span style={{ fontWeight: 600 }}>7-day trends:</span>
+              </div>
+              <div style={{ fontSize: 11, color: (analytics.trends.pageViewsChange ?? 0) >= 0 ? "#22c55e" : "#ef4444" }}>
+                Views: {(analytics.trends.pageViewsChange ?? 0) >= 0 ? "+" : ""}{(analytics.trends.pageViewsChange ?? 0).toFixed(0)}%
+              </div>
+              <div style={{ fontSize: 11, color: (analytics.trends.salesChange ?? 0) >= 0 ? "#22c55e" : "#ef4444" }}>
+                Sales: {(analytics.trends.salesChange ?? 0) >= 0 ? "+" : ""}{(analytics.trends.salesChange ?? 0).toFixed(0)}%
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: analytics.trends.pageViewsChange >= 0 ? "#22c55e" : "#ef4444" }}>
-              Views: {analytics.trends.pageViewsChange >= 0 ? "+" : ""}{analytics.trends.pageViewsChange.toFixed(0)}%
-            </div>
-            <div style={{ fontSize: 11, color: analytics.trends.salesChange >= 0 ? "#22c55e" : "#ef4444" }}>
-              Sales: {analytics.trends.salesChange >= 0 ? "+" : ""}{analytics.trends.salesChange.toFixed(0)}%
-            </div>
-          </div>
+          )}
         </div>
       )}
 

@@ -163,6 +163,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── 8. Decrease product quantities ────────────────────
+    for (const item of cartItems) {
+      // Get current quantity for this size
+      const { data: sizeData } = await supabaseAdmin
+        .from("product_sizes")
+        .select("id, quantity")
+        .eq("product_id", item.productId)
+        .eq("size", item.size)
+        .single();
+
+      if (sizeData) {
+        const newQuantity = Math.max(0, sizeData.quantity - item.quantity);
+        await supabaseAdmin
+          .from("product_sizes")
+          .update({
+            quantity: newQuantity,
+            in_stock: newQuantity > 0,
+          })
+          .eq("id", sizeData.id);
+      }
+    }
+
     return NextResponse.json({ orderNumber: order.order_number });
   } catch (err) {
     console.error("Confirm checkout error:", err);

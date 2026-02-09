@@ -65,6 +65,49 @@ export default function BrandsManagementPage() {
     }
   }
 
+  async function handleDeleteBrand(brandId: string, brandName: string) {
+    if (!supabase) return;
+
+    const confirmed = confirm(`Delete brand "${brandName}"?\n\nThis will also delete all products associated with this brand.`);
+    if (!confirmed) return;
+
+    try {
+      // First delete related products (and their images/sizes via cascade or manually)
+      const { data: products } = await supabase
+        .from("products")
+        .select("id")
+        .eq("brand_id", brandId);
+
+      if (products && products.length > 0) {
+        const productIds = products.map(p => p.id);
+
+        // Delete product images
+        await supabase.from("product_images").delete().in("product_id", productIds);
+
+        // Delete product sizes
+        await supabase.from("product_sizes").delete().in("product_id", productIds);
+
+        // Delete products
+        await supabase.from("products").delete().eq("brand_id", brandId);
+      }
+
+      // Delete the brand
+      const { error } = await supabase
+        .from("brands")
+        .delete()
+        .eq("id", brandId);
+
+      if (error) {
+        alert(`Error deleting brand: ${error.message}`);
+      } else {
+        loadBrands();
+      }
+    } catch (error) {
+      console.error("Error deleting brand:", error);
+      alert(`Error: ${error}`);
+    }
+  }
+
   if (loading || !adminCheck) {
     return (
       <div style={{ padding: 40, textAlign: "center", color: "#666" }}>
@@ -169,23 +212,41 @@ export default function BrandsManagementPage() {
                 </div>
               </div>
 
-              {/* Edit Button */}
-              <Link
-                href={`/account/moderation/brands/${brand.id}/edit`}
-                style={{
-                  padding: "10px 20px",
-                  background: "#000",
-                  color: "#fff",
-                  borderRadius: 10,
-                  cursor: "pointer",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Edit
-              </Link>
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <Link
+                  href={`/account/moderation/brands/${brand.id}/edit`}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#000",
+                    color: "#fff",
+                    borderRadius: 10,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Edit
+                </Link>
+                <button
+                  onClick={() => handleDeleteBrand(brand.id, brand.name)}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#ef4444",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 10,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>

@@ -2,10 +2,83 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { supabase } from "../lib/supabase";
-import { getCartItems, getCartTotal, type CartItem } from "../lib/cart";
+import { getCartItems, getCartTotal, clearCart, type CartItem } from "../lib/cart";
 import { formatPrice, formatTotal } from "../lib/currency";
 import LoadingLogo from "../components/LoadingLogo";
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "");
+
+function PaymentForm({
+  amount,
+  currency,
+  onSuccess,
+  onError,
+}: {
+  amount: number;
+  currency: string;
+  onSuccess: () => void;
+  onError: (msg: string) => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [paying, setPaying] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!stripe || !elements || paying) return;
+
+    setPaying(true);
+    onError("");
+
+    const { error } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/checkout/success`,
+      },
+    });
+
+    if (error) {
+      onError(error.message || "Payment failed");
+      setPaying(false);
+    } else {
+      onSuccess();
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div style={{ marginBottom: 24 }}>
+        <PaymentElement
+          options={{
+            layout: "tabs",
+          }}
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={!stripe || paying}
+        style={{
+          width: "100%",
+          padding: "14px",
+          background: paying ? "#888" : "#000",
+          color: "#fff",
+          border: "none",
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: paying ? "not-allowed" : "pointer",
+          textTransform: "uppercase",
+          letterSpacing: 1,
+        }}
+      >
+        {paying ? "PROCESSING..." : `PAY ${formatPrice(amount, currency)}`}
+      </button>
+    </form>
+  );
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -13,8 +86,10 @@ export default function CheckoutPage() {
   const [total, setTotal] = useState(0);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(true);
-  const [paying, setPaying] = useState(false);
+  const [creatingIntent, setCreatingIntent] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currency, setCurrency] = useState("EUR");
 
   useEffect(() => {
     init();
@@ -41,12 +116,13 @@ export default function CheckoutPage() {
     setCartItems(items);
     setTotal(getCartTotal());
     setEmail(user.email || "");
+    setCurrency(items[0]?.currency || "EUR");
     setLoading(false);
   }
 
-  async function handlePay() {
-    if (!supabase || paying) return;
-    setPaying(true);
+  async function handleProceedToPayment() {
+    if (!supabase || creatingIntent) return;
+    setCreatingIntent(true);
     setError(null);
 
     try {
@@ -65,30 +141,42 @@ export default function CheckoutPage() {
         body: JSON.stringify({ cartItems, email }),
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Payment failed");
-        setPaying(false);
+      // Check if response is JSON
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        setError("Server error. Please try again later.");
+        setCreatingIntent(false);
         return;
       }
 
-      // Store invoiceId for the success page
-      localStorage.setItem("lava_invoice_id", data.invoiceId);
+      const data = await res.json();
 
-      // Redirect to lava.top payment page
-      window.location.href = data.paymentUrl;
+      if (!res.ok) {
+        setError(data.error || "Failed to create payment");
+        setCreatingIntent(false);
+        return;
+      }
+
+      // Store payment intent info for success page
+      localStorage.setItem("stripe_payment_intent", data.paymentIntentId);
+      localStorage.setItem("checkout_cart_items", JSON.stringify(cartItems));
+
+      setClientSecret(data.clientSecret);
+      setCurrency(data.currency || "EUR");
     } catch {
       setError("Something went wrong. Please try again.");
-      setPaying(false);
+      setCreatingIntent(false);
     }
+  }
+
+  function handlePaymentSuccess() {
+    clearCart();
   }
 
   // ── loading ───────────────────────────────────────────
   if (loading) {
     return <LoadingLogo />;
   }
-
 
   // ── render ────────────────────────────────────────────
   return (
@@ -194,71 +282,170 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      {/* email */}
-      <div style={{ marginBottom: 24 }}>
-        <div
-          style={{
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: 1.5,
-            textTransform: "uppercase",
-            color: "#999",
-            marginBottom: 8,
-          }}
-        >
-          EMAIL
-        </div>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          style={{
-            width: "100%",
-            padding: "10px 12px",
-            border: "1px solid #e6e6e6",
-            fontSize: 13,
-            outline: "none",
-            boxSizing: "border-box",
-          }}
-        />
-      </div>
+      {/* Payment section */}
+      {!clientSecret ? (
+        <>
+          {/* email */}
+          <div style={{ marginBottom: 24 }}>
+            <div
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 1.5,
+                textTransform: "uppercase",
+                color: "#999",
+                marginBottom: 8,
+              }}
+            >
+              EMAIL
+            </div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                border: "1px solid #e6e6e6",
+                fontSize: 13,
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
 
-      {/* error */}
-      {error && (
-        <div
-          style={{
-            padding: "10px 14px",
-            background: "#fff0f0",
-            border: "1px solid #ffcccc",
-            marginBottom: 16,
-            fontSize: 13,
-            color: "#c00",
-          }}
-        >
-          {error}
-        </div>
+          {/* error */}
+          {error && (
+            <div
+              style={{
+                padding: "10px 14px",
+                background: "#fff0f0",
+                border: "1px solid #ffcccc",
+                marginBottom: 16,
+                fontSize: 13,
+                color: "#c00",
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          {/* proceed button */}
+          <button
+            onClick={handleProceedToPayment}
+            disabled={creatingIntent || !email}
+            style={{
+              width: "100%",
+              padding: "14px",
+              background: creatingIntent || !email ? "#888" : "#000",
+              color: "#fff",
+              border: "none",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: creatingIntent || !email ? "not-allowed" : "pointer",
+              textTransform: "uppercase",
+              letterSpacing: 1,
+            }}
+          >
+            {creatingIntent ? "LOADING..." : "PROCEED TO PAYMENT"}
+          </button>
+        </>
+      ) : (
+        <>
+          {/* Stripe Elements */}
+          <div style={{ marginBottom: 16 }}>
+            <div
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 1.5,
+                textTransform: "uppercase",
+                color: "#999",
+                marginBottom: 16,
+              }}
+            >
+              PAYMENT DETAILS
+            </div>
+          </div>
+
+          {/* error */}
+          {error && (
+            <div
+              style={{
+                padding: "10px 14px",
+                background: "#fff0f0",
+                border: "1px solid #ffcccc",
+                marginBottom: 16,
+                fontSize: 13,
+                color: "#c00",
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <Elements
+            stripe={stripePromise}
+            options={{
+              clientSecret,
+              appearance: {
+                theme: "stripe",
+                variables: {
+                  colorPrimary: "#000000",
+                  fontFamily: "system-ui, sans-serif",
+                  borderRadius: "0px",
+                },
+              },
+            }}
+          >
+            <PaymentForm
+              amount={total}
+              currency={currency}
+              onSuccess={handlePaymentSuccess}
+              onError={(msg) => setError(msg)}
+            />
+          </Elements>
+
+          {/* back button */}
+          <button
+            onClick={() => {
+              setClientSecret(null);
+              setError(null);
+            }}
+            style={{
+              width: "100%",
+              padding: "12px",
+              background: "transparent",
+              color: "#666",
+              border: "1px solid #e6e6e6",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+              textTransform: "uppercase",
+              letterSpacing: 1,
+              marginTop: 12,
+            }}
+          >
+            ← BACK
+          </button>
+        </>
       )}
 
-      {/* pay button */}
-      <button
-        onClick={handlePay}
-        disabled={paying}
+      {/* Security note */}
+      <div
         style={{
-          width: "100%",
-          padding: "14px",
-          background: paying ? "#888" : "#000",
-          color: "#fff",
-          border: "none",
-          fontSize: 12,
-          fontWeight: 700,
-          cursor: paying ? "not-allowed" : "pointer",
-          textTransform: "uppercase",
-          letterSpacing: 1,
+          marginTop: 24,
+          padding: "12px 16px",
+          background: "#f9f9f9",
+          border: "1px solid #e6e6e6",
+          fontSize: 10,
+          color: "#666",
+          textAlign: "center",
         }}
       >
-        {paying ? "PROCESSING..." : `PAY ${formatTotal(total)}`}
-      </button>
+        🔒 Secure payment powered by Stripe
+      </div>
     </div>
   );
 }

@@ -64,16 +64,11 @@ export async function GET(
         salesRank,
         totalBrands: allBrands?.length || 0,
       },
-      dailyStats: dailyStats || [],
+      history: dailyStats || [],
       trends: {
-        views: {
-          last7Days: last7Views,
-          trend: Math.round(viewsTrend),
-        },
-        sales: {
-          last7Days: last7Sales,
-          trend: Math.round(salesTrend),
-        },
+        pageViewsChange: Math.round(viewsTrend),
+        productViewsChange: 0,
+        salesChange: Math.round(salesTrend),
       },
     });
   } catch (error) {

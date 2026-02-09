@@ -121,9 +121,21 @@ export default function EditBrandPage() {
           if (data && data[0]) {
             finalLat = parseFloat(data[0].lat);
             finalLng = parseFloat(data[0].lon);
-            setLatitude(data[0].lat);
-            setLongitude(data[0].lon);
-            alert(`Координаты найдены: ${data[0].lat}, ${data[0].lon}`);
+
+            // If only country (no city), add random offset so brands don't overlap
+            // Random offset within ~100-300km range
+            if (!city.trim() && country.trim()) {
+              const latOffset = (Math.random() - 0.5) * 4; // ±2 degrees latitude (~220km)
+              const lngOffset = (Math.random() - 0.5) * 6; // ±3 degrees longitude (~varies by lat)
+              finalLat += latOffset;
+              finalLng += lngOffset;
+              alert(`Координаты (случайное смещение внутри страны): ${finalLat.toFixed(4)}, ${finalLng.toFixed(4)}`);
+            } else {
+              alert(`Координаты найдены: ${data[0].lat}, ${data[0].lon}`);
+            }
+
+            setLatitude(finalLat.toString());
+            setLongitude(finalLng.toString());
           } else {
             alert("Геокодирование: результат не найден для \"" + q + "\"");
           }

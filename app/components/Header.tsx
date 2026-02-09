@@ -80,6 +80,7 @@ export default function Header() {
         <Link href="/brands" style={{ textDecoration: "none" }}>BRANDS</Link>
         <Link href="/releases" style={{ textDecoration: "none" }}>RELEASES</Link>
         <Link href="/map" style={{ textDecoration: "none" }}>MAP</Link>
+        <Link href="/gallery" style={{ textDecoration: "none" }}>GALLERY</Link>
       </nav>
 
       <Link href="/" style={{ justifySelf: "center", textDecoration: "none", display: "flex", alignItems: "center" }}>
