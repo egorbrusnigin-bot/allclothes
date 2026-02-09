@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
@@ -16,6 +16,14 @@ interface StripeStatus {
 }
 
 export default function SellerStripePage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 48, textAlign: "center" }}>Loading...</div>}>
+      <SellerStripeContent />
+    </Suspense>
+  );
+}
+
+function SellerStripeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);

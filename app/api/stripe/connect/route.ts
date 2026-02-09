@@ -7,7 +7,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: "2024-12-18.acacia" })
+  ? new Stripe(stripeSecretKey, { apiVersion: "2026-01-28.clover" })
   : null;
 
 // Country code mapping for Stripe

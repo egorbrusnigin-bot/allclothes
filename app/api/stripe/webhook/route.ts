@@ -4,7 +4,7 @@ import Stripe from "stripe";
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: "2024-12-18.acacia" })
+  ? new Stripe(stripeSecretKey, { apiVersion: "2026-01-28.clover" })
   : null;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function handlePaymentSucceeded(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   paymentIntent: Stripe.PaymentIntent
 ) {
   const noteMarker = `stripe:${paymentIntent.id}`;
@@ -148,7 +148,7 @@ async function handlePaymentSucceeded(
     .select("id, price, brand_id")
     .in("id", productIds);
 
-  const priceMap = new Map(products?.map((p) => [p.id, p]) || []);
+  const priceMap = new Map(products?.map((p: any) => [p.id, p]) || []);
 
   // Create order items
   const orderItems = cartItems.map((item: {
@@ -161,7 +161,7 @@ async function handlePaymentSucceeded(
     quantity: number;
     imageUrl: string;
   }) => {
-    const product = priceMap.get(item.productId);
+    const product: any = priceMap.get(item.productId);
     return {
       order_id: order.id,
       product_id: item.productId,
@@ -245,7 +245,7 @@ async function handlePaymentSucceeded(
 }
 
 async function handlePaymentFailed(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   paymentIntent: Stripe.PaymentIntent
 ) {
   // Update payment record if exists
@@ -258,7 +258,7 @@ async function handlePaymentFailed(
 }
 
 async function handleAccountUpdated(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   account: Stripe.Account
 ) {
   // Update seller's Stripe status
@@ -278,7 +278,7 @@ async function handleAccountUpdated(
 }
 
 async function handlePayoutPaid(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   payout: Stripe.Payout
 ) {
   // Update payout record
@@ -291,7 +291,7 @@ async function handlePayoutPaid(
 }
 
 async function handlePayoutFailed(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   payout: Stripe.Payout
 ) {
   // Update payout record
