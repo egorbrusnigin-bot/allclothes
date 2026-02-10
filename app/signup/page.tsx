@@ -697,7 +697,7 @@ function SignupContent() {
                   textDecoration: "none",
                 }}
               >
-                Sign in
+                Log in
               </Link>
             </div>
           ) : null}

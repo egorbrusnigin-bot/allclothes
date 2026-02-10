@@ -130,22 +130,37 @@ export default function Header() {
         {/* Right side */}
         {isMobile ? (
           <div style={{ display: "flex", gap: 14, justifySelf: "end", alignItems: "center" }}>
-            <button
-              onClick={() => setIsCartOpen(true)}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                fontSize: 11,
-                letterSpacing: 1,
-                padding: 0,
-                color: "inherit",
-                fontFamily: "inherit",
-                fontWeight: 700,
-              }}
-            >
-              CART{cartCount > 0 && ` (${cartCount})`}
-            </button>
+            {!isLoggedIn ? (
+              <Link
+                href="/signup"
+                style={{
+                  textDecoration: "none",
+                  fontSize: 11,
+                  letterSpacing: 1,
+                  fontWeight: 700,
+                  color: "inherit",
+                }}
+              >
+                SIGN UP
+              </Link>
+            ) : (
+              <button
+                onClick={() => setIsCartOpen(true)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 11,
+                  letterSpacing: 1,
+                  padding: 0,
+                  color: "inherit",
+                  fontFamily: "inherit",
+                  fontWeight: 700,
+                }}
+              >
+                CART{cartCount > 0 && ` (${cartCount})`}
+              </button>
+            )}
           </div>
         ) : (
           <div style={{ display: "flex", gap: 22, justifySelf: "end", alignItems: "center", fontSize: 13, letterSpacing: 1 }}>
