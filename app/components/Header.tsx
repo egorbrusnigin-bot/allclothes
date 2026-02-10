@@ -281,15 +281,18 @@ export default function Header() {
                 value={currency}
                 onChange={(e) => handleCurrencyChange(e.target.value as DisplayCurrency)}
                 style={{
-                  background: "none",
-                  border: "1px solid #eee",
+                  WebkitAppearance: "none",
+                  appearance: "none" as const,
+                  background: "#f5f5f5",
+                  border: "1px solid #e6e6e6",
+                  borderRadius: 0,
                   fontSize: 13,
                   letterSpacing: 1,
                   cursor: "pointer",
                   fontFamily: "inherit",
-                  color: "inherit",
+                  color: "#000",
                   outline: "none",
-                  padding: "10px 14px",
+                  padding: "12px 16px",
                   width: "100%",
                 }}
               >
@@ -300,16 +303,48 @@ export default function Header() {
             </div>
 
             {/* Account links */}
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
               {!isLoggedIn ? (
                 <>
-                  <Link href="/signup" onClick={() => setMenuOpen(false)} style={{ textDecoration: "none", fontSize: 12, fontWeight: 700, letterSpacing: 1, color: "#000" }}>SIGN UP</Link>
-                  <Link href="/?login=1" onClick={() => setMenuOpen(false)} style={{ textDecoration: "none", fontSize: 12, fontWeight: 700, letterSpacing: 1, background: "#000", color: "#fff", padding: "8px 14px" }}>LOG IN</Link>
+                  <Link
+                    href="/signup"
+                    onClick={() => setMenuOpen(false)}
+                    style={{
+                      textDecoration: "none",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      letterSpacing: 1,
+                      color: "#000",
+                      border: "1px solid #000",
+                      padding: "12px 0",
+                      flex: 1,
+                      textAlign: "center",
+                    }}
+                  >
+                    SIGN UP
+                  </Link>
+                  <Link
+                    href="/?login=1"
+                    onClick={() => setMenuOpen(false)}
+                    style={{
+                      textDecoration: "none",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      letterSpacing: 1,
+                      background: "#000",
+                      color: "#fff",
+                      padding: "12px 0",
+                      flex: 1,
+                      textAlign: "center",
+                    }}
+                  >
+                    LOG IN
+                  </Link>
                 </>
               ) : (
                 <>
-                  <Link href="/account" onClick={() => setMenuOpen(false)} style={{ textDecoration: "none", fontSize: 12, fontWeight: 700, letterSpacing: 1, color: "#000" }}>ACCOUNT</Link>
-                  <Link href="/favorites" onClick={() => setMenuOpen(false)} style={{ textDecoration: "none", fontSize: 12, fontWeight: 700, letterSpacing: 1, color: "#000" }}>FAVORITES</Link>
+                  <Link href="/account" onClick={() => setMenuOpen(false)} style={{ textDecoration: "none", fontSize: 12, fontWeight: 700, letterSpacing: 1, color: "#000", border: "1px solid #e6e6e6", padding: "12px 0", flex: 1, textAlign: "center" }}>ACCOUNT</Link>
+                  <Link href="/favorites" onClick={() => setMenuOpen(false)} style={{ textDecoration: "none", fontSize: 12, fontWeight: 700, letterSpacing: 1, color: "#000", border: "1px solid #e6e6e6", padding: "12px 0", flex: 1, textAlign: "center" }}>FAVORITES</Link>
                 </>
               )}
             </div>
