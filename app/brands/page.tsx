@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "../lib/supabase";
 import { getCountryFlag } from "../lib/countryFlags";
+import { useIsMobile } from "../lib/useIsMobile";
 
 interface Brand {
   id: string;
@@ -101,6 +102,7 @@ function BrandCard({ brand }: { brand: Brand }) {
 export default function BrandsPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     fetchBrands();
@@ -123,8 +125,8 @@ export default function BrandsPage() {
   }
 
   return (
-    <main style={{ padding: "40px 60px", maxWidth: 1600, margin: "0 auto" }}>
-      <div style={{ marginBottom: 50 }}>
+    <main style={{ padding: isMobile ? "24px 16px" : "40px 60px", maxWidth: 1600, margin: "0 auto" }}>
+      <div style={{ marginBottom: isMobile ? 24 : 50 }}>
         <h1 style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
           BRANDS
         </h1>
@@ -137,9 +139,9 @@ export default function BrandsPage() {
       ) : (
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 20,
-          rowGap: 40,
+          gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
+          gap: isMobile ? 12 : 20,
+          rowGap: isMobile ? 24 : 40,
         }}>
           {brands.map((brand) => (
             <BrandCard key={brand.id} brand={brand} />

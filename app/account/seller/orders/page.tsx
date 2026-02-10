@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import { supabase } from "../../../lib/supabase";
+import { useIsMobile } from "../../../lib/useIsMobile";
 
 interface OrderItem {
   id: string;
@@ -40,6 +41,7 @@ interface Order {
 
 export default function SellerOrdersPage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
@@ -226,10 +228,10 @@ export default function SellerOrdersPage() {
   }
 
   return (
-    <div style={{ padding: "40px 60px", maxWidth: 1400, margin: "0 auto" }}>
+    <div style={{ padding: isMobile ? "20px 0" : "40px 60px", maxWidth: 1400, margin: "0 auto" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 30 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+      <div style={{ display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "space-between", marginBottom: isMobile ? 20 : 30, flexDirection: isMobile ? "column" : "row", gap: isMobile ? 12 : 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 12 : 20 }}>
           <Link
             href="/account/seller"
             style={{ fontSize: 12, color: "#666", textDecoration: "none" }}
@@ -271,15 +273,16 @@ export default function SellerOrdersPage() {
       {/* Filters */}
       <div style={{
         display: "flex",
-        gap: 20,
-        marginBottom: 30,
-        paddingBottom: 20,
+        gap: isMobile ? 12 : 20,
+        marginBottom: isMobile ? 20 : 30,
+        paddingBottom: isMobile ? 12 : 20,
         borderBottom: "1px solid #e6e6e6",
-        alignItems: "center",
+        alignItems: isMobile ? "stretch" : "center",
+        flexDirection: isMobile ? "column" : "row",
         flexWrap: "wrap"
       }}>
         {/* Search */}
-        <div style={{ position: "relative", flex: 1, maxWidth: 300 }}>
+        <div style={{ position: "relative", flex: 1, maxWidth: isMobile ? "100%" : 300 }}>
           <input
             type="text"
             placeholder="Search orders..."
@@ -296,13 +299,14 @@ export default function SellerOrdersPage() {
         </div>
 
         {/* Status Filter */}
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 6, overflowX: isMobile ? "auto" : undefined, WebkitOverflowScrolling: "touch" }}>
           {["all", "pending", "confirmed", "shipped", "delivered", "cancelled"].map(status => (
             <button
               key={status}
               onClick={() => setFilter(status)}
               style={{
-                padding: "8px 16px",
+                padding: isMobile ? "6px 10px" : "8px 16px",
+                whiteSpace: "nowrap",
                 border: filter === status ? "1px solid #000" : "1px solid #e6e6e6",
                 background: filter === status ? "#000" : "#fff",
                 color: filter === status ? "#fff" : "#666",
@@ -333,84 +337,92 @@ export default function SellerOrdersPage() {
               <div
                 onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}
                 style={{
-                  padding: "16px 20px",
-                  display: "grid",
-                  gridTemplateColumns: "100px 1fr 150px 100px 100px 30px",
-                  gap: 20,
-                  alignItems: "center",
+                  padding: isMobile ? "12px 14px" : "16px 20px",
+                  display: isMobile ? "flex" : "grid",
+                  flexDirection: isMobile ? "column" : undefined,
+                  gridTemplateColumns: isMobile ? undefined : "100px 1fr 150px 100px 100px 30px",
+                  gap: isMobile ? 8 : 20,
+                  alignItems: isMobile ? "stretch" : "center",
                   cursor: "pointer",
                   background: expandedOrder === order.id ? "#fafafa" : "#fff",
                   transition: "background 0.15s",
                 }}
               >
-                {/* Order ID & Date */}
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "monospace" }}>
-                    #{order.id.substring(0, 8)}
+                {/* Top row on mobile: ID + arrow */}
+                <div style={isMobile ? { display: "flex", justifyContent: "space-between", alignItems: "center" } : undefined}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "monospace" }}>
+                      #{order.id.substring(0, 8)}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#999", marginTop: 2 }}>
+                      {formatDate(order.created_at)}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 10, color: "#999", marginTop: 2 }}>
-                    {formatDate(order.created_at)}
-                  </div>
+                  {isMobile && (
+                    <div style={{ fontSize: 14, color: "#999", transform: expandedOrder === order.id ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.2s" }}>▼</div>
+                  )}
                 </div>
 
                 {/* Customer & Products */}
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {order.customer_email}
                   </div>
-                  <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: "#666", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {order.items.length > 0
-                      ? order.items.map(i => i.product_name).join(", ").substring(0, 60) + (order.items.map(i => i.product_name).join(", ").length > 60 ? "..." : "")
+                      ? order.items.map(i => i.product_name).join(", ").substring(0, isMobile ? 40 : 60) + (order.items.map(i => i.product_name).join(", ").length > (isMobile ? 40 : 60) ? "..." : "")
                       : "Products info unavailable"
                     }
                   </div>
                 </div>
 
-                {/* Amount */}
-                <div style={{ fontSize: 14, fontWeight: 700 }}>
-                  €{(order.total_amount / 100).toFixed(2)}
+                {/* Amount + statuses row on mobile */}
+                <div style={isMobile ? { display: "flex", gap: 12, alignItems: "center" } : undefined}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>
+                    €{(order.total_amount / 100).toFixed(2)}
+                  </div>
+
+                  <div style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    color: getPaymentStatusColor(order.payment_status),
+                  }}>
+                    {order.payment_status}
+                  </div>
+
+                  <div style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    color: getStatusColor(order.status),
+                  }}>
+                    {order.status}
+                  </div>
                 </div>
 
-                {/* Payment Status */}
-                <div style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  color: getPaymentStatusColor(order.payment_status),
-                }}>
-                  {order.payment_status}
-                </div>
-
-                {/* Order Status */}
-                <div style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  color: getStatusColor(order.status),
-                }}>
-                  {order.status}
-                </div>
-
-                {/* Expand Arrow */}
-                <div style={{
-                  fontSize: 14,
-                  color: "#999",
-                  transform: expandedOrder === order.id ? "rotate(180deg)" : "rotate(0)",
-                  transition: "transform 0.2s"
-                }}>
-                  ▼
-                </div>
+                {/* Expand Arrow - desktop only */}
+                {!isMobile && (
+                  <div style={{
+                    fontSize: 14,
+                    color: "#999",
+                    transform: expandedOrder === order.id ? "rotate(180deg)" : "rotate(0)",
+                    transition: "transform 0.2s"
+                  }}>
+                    ▼
+                  </div>
+                )}
               </div>
 
               {/* Expanded Details */}
               {expandedOrder === order.id && (
                 <div style={{
-                  padding: "20px",
+                  padding: isMobile ? "14px" : "20px",
                   borderTop: "1px solid #e6e6e6",
                   background: "#fafafa",
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 30,
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                  gap: isMobile ? 20 : 30,
                 }}>
                   {/* Left: Order Items */}
                   <div>

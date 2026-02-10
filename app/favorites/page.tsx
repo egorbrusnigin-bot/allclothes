@@ -9,6 +9,7 @@ import { formatPrice } from "../lib/currency";
 import FavoriteButton from "../components/FavoriteButton";
 import QuickAddButton from "../components/QuickAddButton";
 import LoadingLogo from "../components/LoadingLogo";
+import { useIsMobile } from "../lib/useIsMobile";
 
 interface Product {
   id: string;
@@ -217,6 +218,7 @@ export default function FavoritesPage() {
   const [brands, setBrands] = useState<string[]>([]);
   const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
   const [, setCurrencyUpdate] = useState(0);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     checkAuth();
@@ -309,7 +311,7 @@ export default function FavoritesPage() {
 
   if (!isLoggedIn) {
     return (
-      <main style={{ maxWidth: 1600, margin: "48px auto", padding: "40px 60px" }}>
+      <main style={{ maxWidth: 1600, margin: "48px auto", padding: isMobile ? "24px 16px" : "40px 60px" }}>
         <h1 style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 50 }}>
           FAVORITES
         </h1>
@@ -351,7 +353,7 @@ export default function FavoritesPage() {
   }
 
   return (
-    <main style={{ padding: "40px 60px", maxWidth: 1600, margin: "0 auto" }}>
+    <main style={{ padding: isMobile ? "24px 16px" : "40px 60px", maxWidth: 1600, margin: "0 auto" }}>
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
           FAVORITES
@@ -652,7 +654,7 @@ export default function FavoritesPage() {
           </div>
 
           {/* Products Grid */}
-          <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, rowGap: 40 }}>
+          <section style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 12 : 20, rowGap: isMobile ? 24 : 40 }}>
             {sortedProducts.map((product) => (
               <ProductCard
                 key={product.id}

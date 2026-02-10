@@ -11,6 +11,7 @@ import { trackBrandPageView, getBrandAnalytics } from "../../lib/analytics";
 import FavoriteButton from "../../components/FavoriteButton";
 import QuickAddButton from "../../components/QuickAddButton";
 import LoadingLogo from "../../components/LoadingLogo";
+import { useIsMobile } from "../../lib/useIsMobile";
 
 interface Brand {
   id: string;
@@ -247,6 +248,7 @@ export default function BrandPage() {
   const [, setCurrencyUpdate] = useState(0);
   const [analytics, setAnalytics] = useState<BrandAnalytics | null>(null);
   const [isOwner, setIsOwner] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (slug) {
@@ -344,7 +346,7 @@ export default function BrandPage() {
   }
 
   return (
-    <main style={{ padding: "40px 60px", maxWidth: 1600, margin: "0 auto" }}>
+    <main style={{ padding: isMobile ? "24px 16px" : "40px 60px", maxWidth: 1600, margin: "0 auto" }}>
       {/* Back */}
       <Link href="/brands" style={{
         fontSize: 11,
@@ -354,13 +356,13 @@ export default function BrandPage() {
         color: "#999",
         textDecoration: "none",
         display: "inline-block",
-        marginBottom: 40,
+        marginBottom: isMobile ? 24 : 40,
       }}>
         ← BRANDS
       </Link>
 
       {/* Hero */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 40, marginBottom: 48, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "center" : "flex-start", gap: isMobile ? 20 : 40, marginBottom: isMobile ? 32 : 48, flexWrap: "wrap" }}>
         {brand.logo_url && (
           <div style={{
             width: 100,
@@ -526,7 +528,7 @@ export default function BrandPage() {
           NO PRODUCTS AVAILABLE YET
         </div>
       ) : (
-        <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, rowGap: 40 }}>
+        <section style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 12 : 20, rowGap: isMobile ? 24 : 40 }}>
           {products.map((product) => (
             <ProductCard
               key={product.id}

@@ -9,6 +9,7 @@ import { formatPrice } from "../lib/currency";
 import FavoriteButton from "../components/FavoriteButton";
 import QuickAddButton from "../components/QuickAddButton";
 import LoadingLogo from "../components/LoadingLogo";
+import { useIsMobile } from "../lib/useIsMobile";
 
 // Fuzzy search - Levenshtein distance
 function levenshteinDistance(a: string, b: string): number {
@@ -328,6 +329,7 @@ export default function CatalogPage() {
   const [brands, setBrands] = useState<string[]>([]);
   const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
   const [, setCurrencyUpdate] = useState(0);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     loadProducts();
@@ -443,7 +445,7 @@ export default function CatalogPage() {
   }
 
   return (
-    <main style={{ padding: "40px 60px", maxWidth: 1600, margin: "0 auto" }}>
+    <main style={{ padding: isMobile ? "24px 16px" : "40px 60px", maxWidth: 1600, margin: "0 auto" }}>
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
@@ -454,12 +456,14 @@ export default function CatalogPage() {
       {/* Filters Bar */}
       <div style={{
         display: "flex",
-        gap: 20,
-        marginBottom: 50,
+        gap: isMobile ? 12 : 20,
+        marginBottom: isMobile ? 24 : 50,
         paddingBottom: 20,
         borderBottom: "1px solid #e6e6e6",
         alignItems: "center",
-        flexWrap: "wrap"
+        flexWrap: "wrap",
+        overflowX: isMobile ? "auto" : undefined,
+        WebkitOverflowScrolling: "touch" as any,
       }}>
 
         {/* Search */}
@@ -786,7 +790,7 @@ export default function CatalogPage() {
           NO PRODUCTS FOUND
         </div>
       ) : (
-        <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20, rowGap: 40 }}>
+        <section style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 12 : 20, rowGap: isMobile ? 24 : 40 }}>
           {sortedProducts.map((product, idx) => (
             <ProductCard
               key={`${product.id}-${searchQuery}`}

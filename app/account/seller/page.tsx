@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import { supabase } from "../../lib/supabase";
+import { useIsMobile } from "../../lib/useIsMobile";
 
 interface BrandStats {
   id: string;
@@ -26,12 +27,12 @@ interface DailyStats {
   sales: number;
 }
 
-function ViewsChart({ dailyStats }: { dailyStats: DailyStats[] }) {
-  const daysPerPage = 14;
+function ViewsChart({ dailyStats, isMobile }: { dailyStats: DailyStats[]; isMobile: boolean }) {
+  const daysPerPage = isMobile ? 7 : 14;
   const pastDays = 49; // 49 days in the past
   const futureDays = 7; // 7 days in the future
-  const totalDays = pastDays + futureDays; // 56 total = 4 pages
-  const totalPages = totalDays / daysPerPage;
+  const totalDays = pastDays + futureDays; // 56 total
+  const totalPages = Math.ceil(totalDays / daysPerPage);
 
   // Start on last page (most recent, with TODAY near the middle)
   const [page, setPage] = useState(totalPages - 1);
@@ -70,8 +71,8 @@ function ViewsChart({ dailyStats }: { dailyStats: DailyStats[] }) {
   };
 
   return (
-    <div style={{ border: "1px solid #e6e6e6", padding: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+    <div style={{ border: "1px solid #e6e6e6", padding: isMobile ? 14 : 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 12 : 20 }}>
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>
           VIEWS
         </div>
@@ -185,6 +186,7 @@ function ViewsChart({ dailyStats }: { dailyStats: DailyStats[] }) {
 
 export default function SellerDashboard() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [brandCount, setBrandCount] = useState(0);
   const [productCount, setProductCount] = useState(0);
@@ -369,19 +371,19 @@ export default function SellerDashboard() {
 
       {/* Main Stats - Highlighted */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-        <div style={{ background: "#000", color: "#fff", padding: 28 }}>
-          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.6, marginBottom: 12 }}>
+        <div style={{ background: "#000", color: "#fff", padding: isMobile ? 16 : 28 }}>
+          <div style={{ fontSize: isMobile ? 9 : 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.6, marginBottom: isMobile ? 8 : 12 }}>
             BALANCE
           </div>
-          <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: -1 }}>
+          <div style={{ fontSize: isMobile ? 22 : 36, fontWeight: 800, letterSpacing: -1 }}>
             €{(totalBalance / 100).toFixed(2)}
           </div>
         </div>
-        <div style={{ background: "#000", color: "#fff", padding: 28 }}>
-          <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.6, marginBottom: 12 }}>
+        <div style={{ background: "#000", color: "#fff", padding: isMobile ? 16 : 28 }}>
+          <div style={{ fontSize: isMobile ? 9 : 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.6, marginBottom: isMobile ? 8 : 12 }}>
             TOTAL SALES
           </div>
-          <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: -1 }}>
+          <div style={{ fontSize: isMobile ? 22 : 36, fontWeight: 800, letterSpacing: -1 }}>
             €{(totalSales / 100).toFixed(2)}
           </div>
         </div>
@@ -446,41 +448,41 @@ export default function SellerDashboard() {
       )}
 
       {/* Secondary Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 2 }}>
-        <div style={{ background: "#f5f5f5", padding: 20 }}>
-          <div style={{ fontSize: 24, fontWeight: 700 }}>#{salesRank || "-"}</div>
-          <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(5, 1fr)", gap: 2 }}>
+        <div style={{ background: "#f5f5f5", padding: isMobile ? 12 : 20 }}>
+          <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700 }}>#{salesRank || "-"}</div>
+          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
             Rank / {totalBrandsCount}
           </div>
         </div>
-        <div style={{ background: "#f5f5f5", padding: 20 }}>
-          <div style={{ fontSize: 24, fontWeight: 700 }}>{totalOrders}</div>
-          <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
+        <div style={{ background: "#f5f5f5", padding: isMobile ? 12 : 20 }}>
+          <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700 }}>{totalOrders}</div>
+          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
             Orders
           </div>
         </div>
-        <div style={{ background: "#f5f5f5", padding: 20 }}>
-          <div style={{ fontSize: 24, fontWeight: 700 }}>{totalPageViews}</div>
-          <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
+        <div style={{ background: "#f5f5f5", padding: isMobile ? 12 : 20 }}>
+          <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700 }}>{totalPageViews}</div>
+          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
             Page Views
           </div>
         </div>
-        <div style={{ background: "#f5f5f5", padding: 20 }}>
-          <div style={{ fontSize: 24, fontWeight: 700 }}>{totalProductViews}</div>
-          <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
+        <div style={{ background: "#f5f5f5", padding: isMobile ? 12 : 20 }}>
+          <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700 }}>{totalProductViews}</div>
+          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
             Product Views
           </div>
         </div>
-        <div style={{ background: "#f5f5f5", padding: 20 }}>
-          <div style={{ fontSize: 24, fontWeight: 700 }}>{totalFavorites}</div>
-          <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
+        <div style={{ background: "#f5f5f5", padding: isMobile ? 12 : 20 }}>
+          <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700 }}>{totalFavorites}</div>
+          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
             Favorites
           </div>
         </div>
       </div>
 
       {/* Views Chart */}
-      <ViewsChart dailyStats={dailyStats} />
+      <ViewsChart dailyStats={dailyStats} isMobile={isMobile} />
 
       {/* Export Button */}
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -583,22 +585,22 @@ export default function SellerDashboard() {
       </div>
 
       {/* Product Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 2 }}>
-        <div style={{ border: "1px solid #e6e6e6", padding: 20, textAlign: "center" }}>
-          <div style={{ fontSize: 28, fontWeight: 800 }}>{brandCount}</div>
-          <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>Brands</div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 2 }}>
+        <div style={{ border: "1px solid #e6e6e6", padding: isMobile ? 14 : 20, textAlign: "center" }}>
+          <div style={{ fontSize: isMobile ? 20 : 28, fontWeight: 800 }}>{brandCount}</div>
+          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>Brands</div>
         </div>
-        <div style={{ border: "1px solid #e6e6e6", padding: 20, textAlign: "center" }}>
-          <div style={{ fontSize: 28, fontWeight: 800 }}>{productCount}</div>
-          <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>Products</div>
+        <div style={{ border: "1px solid #e6e6e6", padding: isMobile ? 14 : 20, textAlign: "center" }}>
+          <div style={{ fontSize: isMobile ? 20 : 28, fontWeight: 800 }}>{productCount}</div>
+          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>Products</div>
         </div>
-        <div style={{ border: "1px solid #e6e6e6", padding: 20, textAlign: "center" }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: "#f59e0b" }}>{pendingCount}</div>
-          <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>Pending</div>
+        <div style={{ border: "1px solid #e6e6e6", padding: isMobile ? 14 : 20, textAlign: "center" }}>
+          <div style={{ fontSize: isMobile ? 20 : 28, fontWeight: 800, color: "#f59e0b" }}>{pendingCount}</div>
+          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>Pending</div>
         </div>
-        <div style={{ border: "1px solid #e6e6e6", padding: 20, textAlign: "center" }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: "#10b981" }}>{approvedCount}</div>
-          <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>Approved</div>
+        <div style={{ border: "1px solid #e6e6e6", padding: isMobile ? 14 : 20, textAlign: "center" }}>
+          <div style={{ fontSize: isMobile ? 20 : 28, fontWeight: 800, color: "#10b981" }}>{approvedCount}</div>
+          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>Approved</div>
         </div>
       </div>
 
@@ -644,7 +646,7 @@ export default function SellerDashboard() {
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
           ACTIONS
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 2 }}>
           <Link
             href="/account/seller/brands"
             style={{

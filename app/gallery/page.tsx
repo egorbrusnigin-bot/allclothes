@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import Link from "next/link";
 import Header from "../components/Header";
+import { useIsMobile } from "../lib/useIsMobile";
 
 interface GalleryPost {
   id: string;
@@ -23,6 +24,7 @@ export default function GalleryPage() {
   const [posts, setPosts] = useState<GalleryPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<GalleryPost | null>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     loadPosts();
@@ -74,7 +76,7 @@ export default function GalleryPage() {
   return (
     <>
       <Header />
-      <main style={{ padding: "40px 24px", maxWidth: 1400, margin: "0 auto" }}>
+      <main style={{ padding: isMobile ? "24px 16px" : "40px 24px", maxWidth: 1400, margin: "0 auto" }}>
         {/* Header */}
         <div style={{ marginBottom: 40, textAlign: "center" }}>
           <h1 style={{ fontSize: 32, fontWeight: 800, marginBottom: 12 }}>
@@ -104,7 +106,7 @@ export default function GalleryPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+              gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(300px, 1fr))",
               gap: 16,
             }}
           >
@@ -196,7 +198,7 @@ export default function GalleryPage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              padding: 40,
+              padding: isMobile ? 16 : 40,
             }}
           >
             <div

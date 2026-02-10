@@ -10,6 +10,7 @@ import { formatPrice } from "../../lib/currency";
 import { trackProductView } from "../../lib/analytics";
 import FavoriteButton from "../../components/FavoriteButton";
 import LoadingLogo from "../../components/LoadingLogo";
+import { useIsMobile } from "../../lib/useIsMobile";
 
 interface Product {
   id: string;
@@ -57,6 +58,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
     contact: false
   });
   const [, setCurrencyUpdate] = useState(0);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     params.then(p => {
@@ -212,8 +214,8 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   });
 
   return (
-    <main style={{ maxWidth: 1400, margin: "0 auto", padding: "40px 60px" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80 }}>
+    <main style={{ maxWidth: 1400, margin: "0 auto", padding: isMobile ? "24px 16px" : "40px 60px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 24 : 80 }}>
         {/* Left column - images */}
         <div style={{ position: "relative" }}>
           {productImages.length > 0 ? (

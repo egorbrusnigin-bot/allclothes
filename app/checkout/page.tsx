@@ -180,7 +180,7 @@ export default function CheckoutPage() {
 
   // ── render ────────────────────────────────────────────
   return (
-    <div style={{ maxWidth: 560, margin: "0 auto", padding: "60px 24px" }}>
+    <div style={{ maxWidth: 560, margin: "0 auto", padding: "40px 16px" }}>
       {/* title */}
       <h1
         style={{

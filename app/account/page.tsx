@@ -1,4 +1,14 @@
+"use client";
+
+import { useIsMobile } from "../lib/useIsMobile";
+
 export default function AccountHome() {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return null; // On mobile the sidebar is visible directly, no need for placeholder
+  }
+
   return (
     <div style={{ display: "grid", placeItems: "center", minHeight: 560 }}>
       <div style={{ textAlign: "center" }}>

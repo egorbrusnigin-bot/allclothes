@@ -427,6 +427,7 @@ function SignupContent() {
                     borderRadius: 4,
                     background: "#fff",
                     fontSize: 15,
+                    boxSizing: "border-box",
                   }}
                 />
               </div>
@@ -458,6 +459,7 @@ function SignupContent() {
                     borderRadius: 4,
                     background: "#fff",
                     fontSize: 15,
+                    boxSizing: "border-box",
                   }}
                 />
               </div>

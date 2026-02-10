@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import { isAdmin } from "../../lib/auth";
+import { useIsMobile } from "../../lib/useIsMobile";
 
 interface PendingProduct {
   name: string;
@@ -95,6 +96,7 @@ function FieldDisplay({ label, value, fullWidth }: { label: string; value: strin
 
 export default function ModerationPage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [products, setProducts] = useState<Product[]>([]);
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [loading, setLoading] = useState(true);
@@ -480,7 +482,7 @@ export default function ModerationPage() {
   return (
     <div style={{ display: "grid", gap: 24 }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 12 : 0 }}>
         <div>
           <h1 style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>
             MODERATION
@@ -489,16 +491,16 @@ export default function ModerationPage() {
             Review sellers and products
           </p>
         </div>
-        <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", gap: isMobile ? 6 : 12, flexWrap: "wrap" }}>
           <Link
             href="/account/moderation/analytics"
             style={{
-              padding: "10px 20px",
+              padding: isMobile ? "8px 12px" : "10px 20px",
               background: "#fff",
               color: "#000",
               border: "1px solid #e6e6e6",
               textDecoration: "none",
-              fontSize: 11,
+              fontSize: isMobile ? 9 : 11,
               fontWeight: 700,
               textTransform: "uppercase",
               letterSpacing: 1,
@@ -509,13 +511,13 @@ export default function ModerationPage() {
           <button
             onClick={() => router.push("/account/moderation/brands")}
             style={{
-              padding: "10px 20px",
+              padding: isMobile ? "8px 12px" : "10px 20px",
               background: "#fff",
               color: "#000",
               border: "1px solid #e6e6e6",
               cursor: "pointer",
               fontWeight: 700,
-              fontSize: 11,
+              fontSize: isMobile ? 9 : 11,
               letterSpacing: 1,
               textTransform: "uppercase",
             }}
@@ -525,13 +527,13 @@ export default function ModerationPage() {
           <button
             onClick={() => router.push("/account/moderation/products/new")}
             style={{
-              padding: "10px 20px",
+              padding: isMobile ? "8px 12px" : "10px 20px",
               background: "#000",
               color: "#fff",
               border: "none",
               cursor: "pointer",
               fontWeight: 700,
-              fontSize: 11,
+              fontSize: isMobile ? 9 : 11,
               letterSpacing: 1,
               textTransform: "uppercase",
             }}
@@ -650,10 +652,10 @@ export default function ModerationPage() {
                   <div
                     onClick={() => setExpandedSeller(isExpanded ? null : seller.id)}
                     style={{
-                      padding: 20,
+                      padding: isMobile ? 14 : 20,
                       cursor: "pointer",
                       display: "flex",
-                      gap: 16,
+                      gap: isMobile ? 10 : 16,
                     }}
                   >
                     {/* Logo */}
@@ -661,18 +663,18 @@ export default function ModerationPage() {
                       <img
                         src={seller.logo_url}
                         alt={seller.brand_name}
-                        style={{ width: 120, height: 120, objectFit: "contain", background: "#f5f5f5", borderRadius: 8 }}
+                        style={{ width: isMobile ? 60 : 120, height: isMobile ? 60 : 120, objectFit: "contain", background: "#f5f5f5", borderRadius: 8, flexShrink: 0 }}
                       />
                     ) : (
-                      <div style={{ width: 120, height: 120, background: "#000", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 32, fontWeight: 800 }}>
+                      <div style={{ width: isMobile ? 60 : 120, height: isMobile ? 60 : 120, background: "#000", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: isMobile ? 20 : 32, fontWeight: 800, flexShrink: 0 }}>
                         {seller.brand_name.charAt(0).toUpperCase()}
                       </div>
                     )}
 
                     {/* Info */}
                     <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                        <h3 style={{ fontSize: 14, fontWeight: 700 }}>{seller.brand_name}</h3>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                        <h3 style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700 }}>{seller.brand_name}</h3>
                         <span
                           style={{
                             padding: "4px 10px",
@@ -719,9 +721,9 @@ export default function ModerationPage() {
 
                   {/* Expanded Details */}
                   {isExpanded && (
-                    <div style={{ borderTop: "1px solid #e6e6e6", padding: 20 }}>
+                    <div style={{ borderTop: "1px solid #e6e6e6", padding: isMobile ? 14 : 20 }}>
                       {/* All Fields Grid */}
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 24 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))", gap: isMobile ? 10 : 16, marginBottom: isMobile ? 16 : 24 }}>
                         {/* Basic Info */}
                         <FieldDisplay label="Brand Name" value={seller.brand_name} />
                         <FieldDisplay label="Logo URL" value={seller.logo_url} />
@@ -761,10 +763,10 @@ export default function ModerationPage() {
                           </div>
                           <div style={{ display: "grid", gap: 16 }}>
                             {pendingProducts.map((product, idx) => (
-                              <div key={idx} style={{ border: "1px solid #e6e6e6", background: "#fafafa", padding: 16 }}>
-                                <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
+                              <div key={idx} style={{ border: "1px solid #e6e6e6", background: "#fafafa", padding: isMobile ? 10 : 16 }}>
+                                <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 10 : 16, marginBottom: isMobile ? 10 : 16 }}>
                                   {/* Images */}
-                                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", width: 200, flexShrink: 0 }}>
+                                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", width: isMobile ? "100%" : 200, flexShrink: 0 }}>
                                     {product.images?.length > 0 ? (
                                       product.images.map((img, i) => (
                                         <img
@@ -772,15 +774,15 @@ export default function ModerationPage() {
                                           src={img}
                                           alt={`${product.name} ${i + 1}`}
                                           style={{
-                                            width: i === 0 ? 200 : 60,
-                                            height: i === 0 ? 200 : 60,
+                                            width: i === 0 ? (isMobile ? "100%" : 200) : 60,
+                                            height: i === 0 ? (isMobile ? 180 : 200) : 60,
                                             objectFit: "cover",
                                             border: "1px solid #e6e6e6",
                                           }}
                                         />
                                       ))
                                     ) : (
-                                      <div style={{ width: 200, height: 200, background: "#eee", display: "flex", alignItems: "center", justifyContent: "center", color: "#999", fontSize: 11 }}>
+                                      <div style={{ width: isMobile ? "100%" : 200, height: isMobile ? 100 : 200, background: "#eee", display: "flex", alignItems: "center", justifyContent: "center", color: "#999", fontSize: 11 }}>
                                         No images
                                       </div>
                                     )}
@@ -834,7 +836,7 @@ export default function ModerationPage() {
                                     </div>
 
                                     {/* Additional Info */}
-                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
                                       <div>
                                         <div style={{ fontSize: 9, color: "#999", textTransform: "uppercase", marginBottom: 2 }}>Size Chart URL</div>
                                         <div style={{ fontSize: 10, color: product.sizeChartUrl ? "#333" : "#ccc" }}>
@@ -1003,22 +1005,22 @@ export default function ModerationPage() {
                   gap: 16,
                 }}
               >
-                <div style={{ display: "flex", gap: 16 }}>
+                <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 10 : 16 }}>
                   {/* Product Image */}
                   {mainImage ? (
                     <img
                       src={mainImage.image_url}
                       alt={product.name}
                       style={{
-                        width: 120,
-                        height: 160,
+                        width: isMobile ? "100%" : 120,
+                        height: isMobile ? 160 : 160,
                         objectFit: "cover",
                       }}
                     />
                   ) : (
                     <div
                       style={{
-                        width: 120,
+                        width: isMobile ? "100%" : 120,
                         height: 160,
                         background: "#f0f0f0",
                       }}

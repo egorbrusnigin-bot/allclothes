@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useIsMobile } from "../../lib/useIsMobile";
 
 type StepNum = 1 | 2 | 3;
 
@@ -36,6 +37,7 @@ export default function Page() {
 function BecomeSellerContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isMobile = useIsMobile();
   const [step, setStep] = useState<StepNum>(1);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -236,9 +238,9 @@ function BecomeSellerContent() {
     () => ({
       minHeight: "calc(100vh - 84px)",
       backgroundColor: "#fff",
-      padding: "34px 24px 80px",
+      padding: isMobile ? "20px 16px 60px" : "34px 24px 80px",
     }),
-    []
+    [isMobile]
   );
 
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -442,7 +444,7 @@ function BecomeSellerContent() {
           margin: "0 auto 22px",
           display: "flex",
           justifyContent: "center",
-          gap: 18,
+          gap: isMobile ? 10 : 18,
           alignItems: "center",
           color: "#777",
           fontSize: 10,
@@ -450,9 +452,9 @@ function BecomeSellerContent() {
         }}
       >
         <Step n={1} label="BASIC INFO" active={step === 1} onClick={() => setStep(1)} />
-        <div style={{ width: 36, height: 1, background: "#e7e7e7" }} />
+        <div style={{ width: isMobile ? 20 : 36, height: 1, background: "#e7e7e7" }} />
         <Step n={2} label="DATA" active={step === 2} onClick={() => setStep(2)} />
-        <div style={{ width: 36, height: 1, background: "#e7e7e7" }} />
+        <div style={{ width: isMobile ? 20 : 36, height: 1, background: "#e7e7e7" }} />
         <Step n={3} label="PAYOUT" active={step === 3} onClick={() => setStep(3)} />
       </div>
 
@@ -847,7 +849,7 @@ function BecomeSellerContent() {
               top: 0,
               right: 0,
               bottom: 0,
-              width: 400,
+              width: isMobile ? "100%" : 400,
               background: "#fff",
               borderLeft: "1px solid #e6e6e6",
               zIndex: 1000,

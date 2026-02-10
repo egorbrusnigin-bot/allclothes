@@ -1,13 +1,16 @@
 "use client";
 
 import type React from "react";
+import { useIsMobile } from "../lib/useIsMobile";
 
 export default function SiteFooter() {
+  const isMobile = useIsMobile();
+
   return (
     <footer
       style={{
         background: "#0a0a0a",
-        padding: "48px 60px 28px",
+        padding: isMobile ? "32px 20px 24px" : "48px 60px 28px",
       }}
     >
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -15,8 +18,8 @@ export default function SiteFooter() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1.3fr 1fr 1fr 1fr",
-            gap: 40,
+            gridTemplateColumns: isMobile ? "1fr 1fr" : "1.3fr 1fr 1fr 1fr",
+            gap: isMobile ? 24 : 40,
           }}
         >
           {/* FOLLOW US */}
@@ -91,10 +94,11 @@ export default function SiteFooter() {
         <div
           style={{
             display: "flex",
-            alignItems: "center",
+            alignItems: isMobile ? "flex-start" : "center",
             justifyContent: "space-between",
-            gap: 16,
+            gap: isMobile ? 20 : 16,
             flexWrap: "wrap",
+            flexDirection: isMobile ? "column" : "row",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -199,7 +203,7 @@ function PaymentIconsRow() {
         display: "flex",
         gap: 6,
         flexWrap: "wrap",
-        justifyContent: "flex-end",
+        justifyContent: "flex-start",
         alignItems: "center",
       }}
     >

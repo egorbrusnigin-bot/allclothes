@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
+import { useIsMobile } from "../lib/useIsMobile";
 
 const baseItems = [
   { href: "/account/orders", label: "My orders" },
@@ -20,6 +21,7 @@ const bottomItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [isSeller, setIsSeller] = useState(false);
   const [sellerStatus, setSellerStatus] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -116,18 +118,33 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside style={{ display: "grid", gap: 14 }}>
-      <div style={{ border: "1px solid #e6e6e6", padding: 20, display: "flex", alignItems: "center", justifyContent: "space-between", background: "#fff" }}>
-        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          <div style={{ width: 60, height: 60, background: "#f1f1f1", border: "1px solid #e6e6e6" }} />
+    <aside style={{ display: "grid", gap: isMobile ? 10 : 14 }}>
+      {/* Profile header */}
+      <div style={{
+        border: "1px solid #e6e6e6",
+        padding: isMobile ? "14px 16px" : 20,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        background: "#fff",
+      }}>
+        <div style={{ display: "flex", gap: isMobile ? 10 : 14, alignItems: "center" }}>
+          <div style={{
+            width: isMobile ? 40 : 60,
+            height: isMobile ? 40 : 60,
+            background: "#f1f1f1",
+            border: "1px solid #e6e6e6",
+            flexShrink: 0,
+          }} />
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5 }}>ACCOUNT</div>
-            {userEmail && <div style={{ fontSize: 10, color: "#666", marginTop: 4, letterSpacing: 0.3 }}>{userEmail}</div>}
+            <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5 }}>ACCOUNT</div>
+            {userEmail && <div style={{ fontSize: 10, color: "#666", marginTop: 4, letterSpacing: 0.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: isMobile ? 180 : "none" }}>{userEmail}</div>}
           </div>
         </div>
       </div>
 
-      <div style={{ display: "grid", gap: 12 }}>
+      {/* Nav items */}
+      <div style={{ display: "grid", gap: isMobile ? 8 : 12 }}>
         {allItems.map((it) => {
           const active = pathname === it.href;
           return (
@@ -138,21 +155,21 @@ export default function Sidebar() {
                 textDecoration: "none",
                 color: "#000",
                 border: "1px solid #e6e6e6",
-                padding: "16px 18px",
+                padding: isMobile ? "12px 14px" : "16px 18px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 background: active ? "#fafafa" : "#fff",
               }}
             >
-              <span style={{ fontSize: 12, fontWeight: active ? 700 : 400, letterSpacing: 0.5 }}>{it.label}</span>
+              <span style={{ fontSize: isMobile ? 11 : 12, fontWeight: active ? 700 : 400, letterSpacing: 0.5 }}>{it.label}</span>
               <span style={{ color: "#777", fontSize: 14 }}>›</span>
             </Link>
           );
         })}
 
-        <button onClick={logout} style={{ all: "unset", cursor: "pointer", border: "1px solid #e6e6e6", padding: "16px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#fff" }}>
-          <span style={{ fontSize: 12, letterSpacing: 0.5 }}>Log out</span>
+        <button onClick={logout} style={{ all: "unset", cursor: "pointer", border: "1px solid #e6e6e6", padding: isMobile ? "12px 14px" : "16px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#fff" }}>
+          <span style={{ fontSize: isMobile ? 11 : 12, letterSpacing: 0.5 }}>Log out</span>
           <span style={{ color: "#777", fontSize: 14 }}>›</span>
         </button>
       </div>

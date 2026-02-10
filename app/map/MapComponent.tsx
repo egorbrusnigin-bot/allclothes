@@ -5,6 +5,7 @@ import { Map, Marker, Popup } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import Link from "next/link";
 import { getCountryFlag } from "../lib/countryFlags";
+import { useIsMobile } from "../lib/useIsMobile";
 
 interface Brand {
   id: string;
@@ -25,6 +26,7 @@ interface MapComponentProps {
 export default function MapComponent({ brands }: MapComponentProps) {
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
   const [showPopup, setShowPopup] = useState(false);
+  const isMobile = useIsMobile();
 
   // Всегда показываем широкий обзор Европы
   const [viewState, setViewState] = useState({
@@ -50,7 +52,7 @@ export default function MapComponent({ brands }: MapComponentProps) {
     <Map
       {...viewState}
       onMove={(evt) => setViewState(evt.viewState)}
-      style={{ height: "calc(100vh - 300px)", minHeight: 500, width: "100%" }}
+      style={{ height: isMobile ? "calc(100vh - 200px)" : "calc(100vh - 300px)", minHeight: isMobile ? 350 : 500, width: "100%" }}
       mapStyle={mapStyle}
       projection="globe"
     >
@@ -93,8 +95,8 @@ export default function MapComponent({ brands }: MapComponentProps) {
                 background: "#fff",
                 border: "2px solid #000",
                 borderRadius: "50%",
-                width: 48,
-                height: 48,
+                width: isMobile ? 36 : 48,
+                height: isMobile ? 36 : 48,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -116,8 +118,8 @@ export default function MapComponent({ brands }: MapComponentProps) {
                   src={brand.logo_url}
                   alt={brand.name}
                   style={{
-                    width: 30,
-                    height: 30,
+                    width: isMobile ? 22 : 30,
+                    height: isMobile ? 22 : 30,
                     objectFit: "contain",
                   }}
                 />
