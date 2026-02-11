@@ -204,9 +204,13 @@ export default function SellerDashboard() {
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
   const [stripeConnected, setStripeConnected] = useState(false);
   const [stripePayoutsEnabled, setStripePayoutsEnabled] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
 
   useEffect(() => {
     checkSellerAndLoad();
+    loadNotifications();
   }, []);
 
   async function checkSellerAndLoad() {
@@ -233,7 +237,51 @@ export default function SellerDashboard() {
     }
 
     await loadStats(user.id);
+    await loadRecentOrders(user.id);
     setLoading(false);
+  }
+
+  async function loadNotifications() {
+    if (!supabase) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("read", false)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    setNotifications(data || []);
+  }
+
+  async function markNotificationRead(id: string) {
+    if (!supabase) return;
+    await supabase.from("notifications").update({ read: true }).eq("id", id);
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  }
+
+  async function markAllRead() {
+    if (!supabase) return;
+    const ids = notifications.map(n => n.id);
+    if (ids.length === 0) return;
+    await supabase.from("notifications").update({ read: true }).in("id", ids);
+    setNotifications([]);
+  }
+
+  async function loadRecentOrders(userId: string) {
+    if (!supabase) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/seller/orders", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRecentOrders((data.orders || []).slice(0, 5));
+      }
+    } catch { /* ignore */ }
   }
 
   async function loadStats(userId: string) {
@@ -360,13 +408,96 @@ export default function SellerDashboard() {
   return (
     <div style={{ display: "grid", gap: 32 }}>
       {/* Header */}
-      <div>
-        <div style={{ fontSize: 10, color: "#999", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>
-          SELLER DASHBOARD
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ fontSize: 10, color: "#999", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>
+            SELLER DASHBOARD
+          </div>
+          <h1 style={{ fontSize: 32, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>
+            My Shop
+          </h1>
         </div>
-        <h1 style={{ fontSize: 32, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>
-          My Shop
-        </h1>
+
+        {/* Notification Bell */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            style={{
+              background: "none", border: "1px solid #e6e6e6", padding: "8px 10px",
+              cursor: "pointer", position: "relative", display: "flex", alignItems: "center",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            {notifications.length > 0 && (
+              <div style={{
+                position: "absolute", top: -4, right: -4,
+                width: 16, height: 16, borderRadius: "50%",
+                background: "#ef4444", color: "#fff",
+                fontSize: 9, fontWeight: 700,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {notifications.length > 9 ? "9+" : notifications.length}
+              </div>
+            )}
+          </button>
+
+          {showNotifications && (
+            <div style={{
+              position: "absolute", top: "calc(100% + 8px)", right: 0,
+              width: 320, background: "#fff", border: "1px solid #e6e6e6",
+              boxShadow: "0 8px 30px rgba(0,0,0,0.12)", zIndex: 100,
+            }}>
+              <div style={{
+                padding: "12px 16px", borderBottom: "1px solid #e6e6e6",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>
+                  Notifications
+                </span>
+                {notifications.length > 0 && (
+                  <button
+                    onClick={markAllRead}
+                    style={{
+                      background: "none", border: "none", fontSize: 10,
+                      color: "#666", cursor: "pointer", textDecoration: "underline",
+                    }}
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
+              <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                {notifications.length === 0 ? (
+                  <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 12, color: "#999" }}>
+                    No new notifications
+                  </div>
+                ) : (
+                  notifications.map(n => (
+                    <div
+                      key={n.id}
+                      onClick={() => markNotificationRead(n.id)}
+                      style={{
+                        padding: "12px 16px", borderBottom: "1px solid #f0f0f0",
+                        cursor: "pointer", transition: "background 0.15s",
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#fafafa")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
+                    >
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{n.title}</div>
+                      <div style={{ fontSize: 11, color: "#666" }}>{n.message}</div>
+                      <div style={{ fontSize: 9, color: "#999", marginTop: 4 }}>
+                        {new Date(n.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Stats - Highlighted */}
@@ -635,6 +766,58 @@ export default function SellerDashboard() {
                   </div>
                 </div>
                 <span style={{ fontSize: 16, color: "#999" }}>→</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent Orders */}
+      {recentOrders.length > 0 && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>
+              RECENT ORDERS
+            </div>
+            <Link href="/account/seller/orders" style={{ fontSize: 11, color: "#666", textDecoration: "none" }}>
+              View All →
+            </Link>
+          </div>
+          <div style={{ display: "grid", gap: 2 }}>
+            {recentOrders.map((order: any) => (
+              <Link
+                key={order.id}
+                href="/account/seller/orders"
+                style={{
+                  textDecoration: "none", color: "#000",
+                  padding: "12px 16px", background: "#fafafa",
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  transition: "background 0.15s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = "#f0f0f0"}
+                onMouseLeave={e => e.currentTarget.style.background = "#fafafa"}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, color: "#999", fontFamily: "monospace", flexShrink: 0 }}>
+                    #{order.id.substring(0, 8)}
+                  </div>
+                  <div style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {order.customer_email}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600 }}>
+                    {order.total_amount != null ? `€${(order.total_amount / 100).toFixed(2)}` : ""}
+                  </div>
+                  <div style={{
+                    fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5,
+                    padding: "2px 6px",
+                    background: order.status === "shipped" ? "#d4edda" : order.status === "pending" ? "#fff3cd" : "#e2e3e5",
+                    color: order.status === "shipped" ? "#155724" : order.status === "pending" ? "#856404" : "#383d41",
+                  }}>
+                    {order.status}
+                  </div>
+                </div>
               </Link>
             ))}
           </div>

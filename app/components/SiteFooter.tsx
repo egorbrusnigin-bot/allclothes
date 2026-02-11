@@ -1,7 +1,19 @@
 "use client";
 
 import type React from "react";
+import Link from "next/link";
 import { useIsMobile } from "../lib/useIsMobile";
+
+const footerLinks: Record<string, string> = {
+  "About us": "/about",
+  "Influencer Program": "/influencer",
+  "Contact": "/contact",
+  "Refund Policy": "/refund-policy",
+  "Imprint": "/imprint",
+  "Privacy Policy": "/privacy-policy",
+  "Terms and Conditions": "/terms",
+  "Shipping Policy": "/shipping-policy",
+};
 
 export default function SiteFooter() {
   const isMobile = useIsMobile();
@@ -138,15 +150,15 @@ function Col({ title, items }: { title: string; items: string[] }) {
       <div style={colTitle}>{title}</div>
       <div style={{ display: "grid", gap: 9, marginTop: 16 }}>
         {items.map((it, idx) => (
-          <a
+          <Link
             key={idx}
-            href="#"
+            href={footerLinks[it] || "#"}
             style={linkItem}
             onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
             onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.4"; }}
           >
             {it}
-          </a>
+          </Link>
         ))}
       </div>
     </div>

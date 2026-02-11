@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
+import { notifySellerNewOrder } from "../../../lib/notifySellerNewOrder";
+import { getServerExchangeRates } from "../../../lib/exchangeRates";
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey
@@ -107,6 +109,7 @@ async function handlePaymentSucceeded(
   const brandId = metadata.brand_id;
   const sellerId = metadata.seller_id;
   const cartItemsJson = metadata.cart_items;
+  const shippingAddress = metadata.shipping_address;
 
   if (!userId || !cartItemsJson) {
     console.error("Missing metadata in payment intent:", paymentIntent.id);
@@ -123,15 +126,38 @@ async function handlePaymentSucceeded(
   const sellerAmount = totalAmount - platformFee;
   const currency = paymentIntent.currency.toUpperCase();
 
-  // Create order
+  // Парсим адрес доставки
+  let parsedShipping = null;
+  if (shippingAddress) {
+    try {
+      const addr = JSON.parse(shippingAddress);
+      parsedShipping = {
+        name: addr.fullName || "",
+        address: addr.address || "",
+        city: addr.city || "",
+        postal_code: addr.postalCode || "",
+        country: addr.country || "",
+      };
+    } catch { /* ignore */ }
+  }
+
+  // Создаём заказ
   const { data: order, error: orderErr } = await supabase
     .from("orders")
     .insert({
       user_id: userId,
+      brand_id: brandId || null,
       status: "pending",
       total: totalAmount,
+      total_amount: Math.round(totalAmount * 100),
       currency,
       notes: noteMarker,
+      customer_email: metadata.email || "",
+      customer_name: parsedShipping?.name || "",
+      payment_status: "paid",
+      payment_method: "card",
+      shipping_address: parsedShipping ? JSON.stringify(parsedShipping) : null,
+      stripe_payment_intent_id: paymentIntent.id,
     })
     .select("id, order_number")
     .single();
@@ -145,12 +171,13 @@ async function handlePaymentSucceeded(
   const productIds = [...new Set(cartItems.map((i: { productId: string }) => i.productId))];
   const { data: products } = await supabase
     .from("products")
-    .select("id, price, brand_id")
+    .select("id, price, currency, brand_id")
     .in("id", productIds);
 
   const priceMap = new Map(products?.map((p: any) => [p.id, p]) || []);
 
-  // Create order items
+  // Create order items (prices converted to EUR using live rates)
+  const rates = await getServerExchangeRates();
   const orderItems = cartItems.map((item: {
     productId: string;
     productName: string;
@@ -162,13 +189,18 @@ async function handlePaymentSucceeded(
     imageUrl: string;
   }) => {
     const product: any = priceMap.get(item.productId);
+    const rawPrice = product?.price || item.price;
+    const rawCurrency = (product?.currency || item.currency || "EUR").toUpperCase();
+    let priceEUR = rawPrice;
+    if (rawCurrency === "USD") priceEUR = rawPrice * rates.usdToEur;
+    else if (rawCurrency === "GBP") priceEUR = rawPrice * rates.gbpToEur;
     return {
       order_id: order.id,
       product_id: item.productId,
       product_name: item.productName,
       brand_name: item.brandName,
-      price: product?.price || item.price,
-      currency: item.currency,
+      price: Math.round(priceEUR * 100) / 100,
+      currency: "EUR",
       size: item.size,
       quantity: item.quantity,
       image_url: item.imageUrl || null,
@@ -238,6 +270,23 @@ async function handlePaymentSucceeded(
       event_type: "sale",
       amount: sellerAmount,
       user_id: userId,
+    });
+  }
+
+  // Notify seller about new order
+  if (brandId) {
+    await notifySellerNewOrder({
+      orderId: order.id,
+      brandId,
+      customerEmail: metadata.email || "",
+      customerName: parsedShipping?.name || "",
+      totalAmount: Math.round(totalAmount * 100),
+      currency,
+      items: cartItems.map((i: any) => ({
+        productName: i.productName,
+        size: i.size,
+        quantity: i.quantity,
+      })),
     });
   }
 

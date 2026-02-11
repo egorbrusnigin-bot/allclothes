@@ -296,7 +296,7 @@ export default function Home() {
   }
 
   return (
-    <main style={{ padding: isMobile ? "24px 16px" : "40px 60px", maxWidth: 1600, margin: "0 auto" }}>
+    <main style={{ padding: isMobile ? "16px 4px" : "24px 40px", maxWidth: 1600, margin: "0 auto" }}>
       {/* Header */}
       <div style={{ marginBottom: 50 }}>
         <h1 style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>

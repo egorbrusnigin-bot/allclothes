@@ -57,7 +57,8 @@ export default function OrdersPage() {
         return;
       }
 
-      const { data, error } = await supabase
+      // Пробуем загрузить заказы с order_items
+      let { data, error } = await supabase
         .from("orders")
         .select(
           `
@@ -72,6 +73,18 @@ export default function OrdersPage() {
         )
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
+
+      // Если ошибка в join (колонки нет), пробуем без проблемных колонок
+      if (error) {
+        console.error("Error loading orders with items:", error);
+        const fallback = await supabase
+          .from("orders")
+          .select("id, order_number, status, total, currency, created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        data = fallback.data?.map((o: any) => ({ ...o, order_items: [] })) || null;
+        error = fallback.error;
+      }
 
       if (error) {
         console.error("Error loading orders:", error);

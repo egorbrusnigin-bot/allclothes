@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "../../lib/supabaseAdmin";
 import Stripe from "stripe";
+import { convertToEURServer } from "../../lib/exchangeRates";
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey
@@ -46,8 +47,17 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 2. Parse + validate body ────────────────────────
-    const { cartItems, email }: { cartItems: CartItem[]; email: string } =
-      await request.json();
+    const { cartItems, email, shippingAddress }: {
+      cartItems: CartItem[];
+      email: string;
+      shippingAddress?: {
+        fullName: string;
+        address: string;
+        city: string;
+        postalCode: string;
+        country: string;
+      };
+    } = await request.json();
 
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
       return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
@@ -62,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     const { data: products, error: prodErr } = await supabaseAdmin
       .from("products")
-      .select("id, price, status, brand_id")
+      .select("id, price, currency, status, brand_id")
       .in("id", productIds);
 
     if (prodErr || !products) {
@@ -90,7 +100,9 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      serverTotal += product.price * item.quantity;
+      // Конвертируем в EUR (платформа работает в евро)
+      const priceInEUR = await convertToEURServer(product.price, product.currency || "EUR");
+      serverTotal += priceInEUR * item.quantity;
       if (product.brand_id) {
         brandIds.add(product.brand_id);
       }
@@ -106,7 +118,8 @@ export async function POST(request: NextRequest) {
     }
 
     const brandId = [...brandIds][0];
-    const currency = (cartItems[0].currency || "EUR").toLowerCase();
+    // Платформа работает в EUR — всё конвертируется в евро
+    const currency = "eur";
 
     // ── 4. Get seller's Stripe account ──────────────────
     let stripeAccountId: string | null = null;
@@ -159,6 +172,9 @@ export async function POST(request: NextRequest) {
         brand_id: brandId || "",
         seller_id: sellerId || "",
         cart_items: JSON.stringify(cartItemsForMeta),
+        shipping_address: shippingAddress
+          ? JSON.stringify(shippingAddress)
+          : "",
       },
       receipt_email: email,
     };

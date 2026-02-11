@@ -100,6 +100,8 @@ export default function Sidebar() {
   const roleItems = [];
   if (isSeller) {
     roleItems.push({ href: "/account/seller", label: "My Shop" });
+    roleItems.push({ href: "/account/seller/orders", label: "Seller Orders" });
+    roleItems.push({ href: "/account/seller/gallery", label: "Gallery" });
   } else if (sellerStatus === "pending") {
     roleItems.push({ href: "/account/become-seller", label: "Application Pending" });
   } else if (sellerStatus === "rejected") {
@@ -109,6 +111,7 @@ export default function Sidebar() {
   }
   if (isAdmin) {
     roleItems.push({ href: "/account/moderation", label: "Moderation" });
+    roleItems.push({ href: "/account/moderation/gallery", label: "Gallery Moderation" });
   }
 
   const allItems = [

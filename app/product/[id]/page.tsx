@@ -214,7 +214,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   });
 
   return (
-    <main style={{ maxWidth: 1400, margin: "0 auto", padding: isMobile ? "24px 16px" : "40px 60px" }}>
+    <main style={{ maxWidth: 1400, margin: "0 auto", padding: isMobile ? "16px 4px" : "24px 40px" }}>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 24 : 80 }}>
         {/* Left column - images */}
         <div style={{ position: "relative" }}>
