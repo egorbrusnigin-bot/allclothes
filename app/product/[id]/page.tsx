@@ -6,7 +6,7 @@ import Link from "next/link";
 import { getCountryFlag } from "../../lib/countryFlags";
 import { isProductFavorited } from "../../lib/favorites";
 import { addToCart, addToRecentlyViewed } from "../../lib/cart";
-import { formatPrice } from "../../lib/currency";
+import Price from "../../components/Price";
 import { trackProductView } from "../../lib/analytics";
 import FavoriteButton from "../../components/FavoriteButton";
 import LoadingLogo from "../../components/LoadingLogo";
@@ -276,7 +276,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
           {/* Price */}
           <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 32, borderBottom: "1px solid #e6e6e6", paddingBottom: 16 }}>
-            {formatPrice(product.price, product.currency)}
+            <Price price={product.price} currency={product.currency} />
           </div>
 
           {/* Size selection */}

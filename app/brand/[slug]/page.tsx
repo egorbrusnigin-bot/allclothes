@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import { getCountryFlag } from "../../lib/countryFlags";
 import { getFavoritedProductIds } from "../../lib/favorites";
-import { formatPrice } from "../../lib/currency";
+import Price from "../../components/Price";
 import { trackBrandPageView, getBrandAnalytics } from "../../lib/analytics";
 import FavoriteButton from "../../components/FavoriteButton";
 import QuickAddButton from "../../components/QuickAddButton";
@@ -211,7 +211,7 @@ function ProductCard({ product, isNew, isFavorited = false, brandName, brandCoun
       {/* Price and Actions */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#000" }}>
-          {formatPrice(product.price, product.currency)}
+          <Price price={product.price} currency={product.currency} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <QuickAddButton

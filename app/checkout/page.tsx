@@ -175,8 +175,6 @@ export default function CheckoutPage() {
       localStorage.setItem("checkout_cart_items", JSON.stringify(cartItems));
 
       setClientSecret(data.clientSecret);
-      // Обновляем сумму и валюту из серверного ответа (серверная цена может отличаться)
-      setTotal(data.amount);
       setCurrency(data.currency || "EUR");
     } catch {
       setError("Something went wrong. Please try again.");
