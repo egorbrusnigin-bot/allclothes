@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import * as XLSX from "xlsx";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "../../lib/supabase";
 import { useIsMobile } from "../../lib/useIsMobile";
 
@@ -27,163 +28,183 @@ interface DailyStats {
   sales: number;
 }
 
-function ViewsChart({ dailyStats, isMobile }: { dailyStats: DailyStats[]; isMobile: boolean }) {
-  const daysPerPage = isMobile ? 7 : 14;
-  const pastDays = 49; // 49 days in the past
-  const futureDays = 7; // 7 days in the future
-  const totalDays = pastDays + futureDays; // 56 total
-  const totalPages = Math.ceil(totalDays / daysPerPage);
+type DateRange = "7d" | "30d" | "90d";
 
-  // Start on last page (most recent, with TODAY near the middle)
-  const [page, setPage] = useState(totalPages - 1);
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-  // Generate all days (oldest first, future last - chronological order)
-  const allDays: { date: string; views: number; isFuture: boolean }[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
 
-  for (let i = pastDays - 1; i >= -futureDays; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split("T")[0];
-    const stat = dailyStats.find(s => s.date === dateStr);
-    const dayDate = new Date(d);
-    dayDate.setHours(0, 0, 0, 0);
-    allDays.push({
-      date: dateStr,
-      views: stat ? stat.page_views + stat.product_views : 0,
-      isFuture: dayDate > today,
-    });
-  }
+function getDaysForRange(range: DateRange): number {
+  return range === "7d" ? 7 : range === "30d" ? 30 : 90;
+}
 
-  // Page 0 = oldest, last page = most recent (with TODAY)
-  const startIdx = page * daysPerPage;
-  const endIdx = Math.min(startIdx + daysPerPage, allDays.length);
-  const visibleDays = allDays.slice(startIdx, endIdx);
-  const max = Math.max(...visibleDays.map(d => d.views), 1);
+function filterByRange(stats: DailyStats[], range: DateRange): DailyStats[] {
+  const days = getDaysForRange(range);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  cutoff.setHours(0, 0, 0, 0);
+  return stats.filter(s => new Date(s.date) >= cutoff);
+}
 
-  const formatDateRange = () => {
-    if (visibleDays.length === 0) return "";
-    const first = new Date(visibleDays[0].date);
-    const last = new Date(visibleDays[visibleDays.length - 1].date);
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    return `${first.getDate()} ${months[first.getMonth()]} — ${last.getDate()} ${months[last.getMonth()]}`;
-  };
+function getPreviousPeriod(stats: DailyStats[], range: DateRange): DailyStats[] {
+  const days = getDaysForRange(range);
+  const end = new Date();
+  end.setDate(end.getDate() - days);
+  end.setHours(0, 0, 0, 0);
+  const start = new Date(end);
+  start.setDate(start.getDate() - days);
+  return stats.filter(s => {
+    const d = new Date(s.date);
+    return d >= start && d < end;
+  });
+}
+
+function sumField(stats: DailyStats[], field: keyof DailyStats): number {
+  return stats.reduce((sum, s) => sum + ((s[field] as number) || 0), 0);
+}
+
+function calcChange(current: number, previous: number): string {
+  if (previous === 0) return current > 0 ? "+100%" : "0%";
+  const pct = ((current - previous) / previous) * 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}%`;
+}
+
+// ── Date Range Selector ──────────────────────────────
+function DateRangeSelector({ value, onChange }: { value: DateRange; onChange: (v: DateRange) => void }) {
+  const options: { value: DateRange; label: string }[] = [
+    { value: "7d", label: "Last 7 days" },
+    { value: "30d", label: "Last 30 days" },
+    { value: "90d", label: "Last 90 days" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: 0 }}>
+      {options.map(opt => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          style={{
+            padding: "6px 14px",
+            fontSize: 11,
+            fontWeight: 600,
+            border: "1px solid #e6e6e6",
+            marginLeft: opt.value === "7d" ? 0 : -1,
+            background: value === opt.value ? "#000" : "#fff",
+            color: value === opt.value ? "#fff" : "#666",
+            cursor: "pointer",
+            transition: "all 0.15s",
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Line Chart Component ─────────────────────────────
+function StripeLineChart({
+  data,
+  title,
+  currentValue,
+  comparisonText,
+  formatValue,
+  isMobile,
+}: {
+  data: { date: string; value: number }[];
+  title: string;
+  currentValue: string;
+  comparisonText: string;
+  formatValue?: (v: number) => string;
+  isMobile: boolean;
+}) {
+  const fmt = formatValue || ((v: number) => String(v));
 
   return (
-    <div style={{ border: "1px solid #e6e6e6", padding: isMobile ? 14 : 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 12 : 20 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>
-          VIEWS
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 10, color: "#999" }}>{formatDateRange()}</span>
-          <div style={{ display: "flex", gap: 4 }}>
-            <button
-              onClick={() => setPage(p => Math.max(p - 1, 0))}
-              disabled={page <= 0}
-              style={{
-                width: 28,
-                height: 28,
-                border: "1px solid #e6e6e6",
-                background: page <= 0 ? "#fafafa" : "#fff",
-                cursor: page <= 0 ? "not-allowed" : "pointer",
-                fontSize: 14,
-                color: page <= 0 ? "#ccc" : "#000",
-              }}
-            >
-              ←
-            </button>
-            <button
-              onClick={() => setPage(p => Math.min(p + 1, totalPages - 1))}
-              disabled={page >= totalPages - 1}
-              style={{
-                width: 28,
-                height: 28,
-                border: "1px solid #e6e6e6",
-                background: page >= totalPages - 1 ? "#fafafa" : "#fff",
-                cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
-                fontSize: 14,
-                color: page >= totalPages - 1 ? "#ccc" : "#000",
-              }}
-            >
-              →
-            </button>
+    <div style={{ border: "1px solid #e6e6e6", padding: isMobile ? 16 : 24, background: "#fafafa" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#999", marginBottom: 6 }}>
+            {title}
           </div>
+          <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.5 }}>{currentValue}</div>
+        </div>
+        <div style={{ fontSize: 11, color: "#666", textAlign: "right", marginTop: 4 }}>
+          {comparisonText}
         </div>
       </div>
-
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 120 }}>
-        {visibleDays.map((day, i) => {
-          const height = day.views > 0 ? Math.max((day.views / max) * 100, 10) : 0;
-          const date = new Date(day.date);
-          const dayNum = date.getDate();
-          const todayStr = new Date().toISOString().split("T")[0];
-          const isToday = day.date === todayStr;
-          const isFuture = day.isFuture;
-          return (
-            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, opacity: isFuture ? 0.4 : 1 }}>
-              <div
-                style={{
-                  height: 100,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "flex-end",
-                  width: "100%",
-                  position: "relative"
+      <div style={{ width: "100%", height: isMobile ? 150 : 200, marginTop: 16 }}>
+        {data.length > 1 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={formatDate}
+                tick={{ fontSize: 10, fill: "#999" }}
+                axisLine={{ stroke: "#e6e6e6" }}
+                tickLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: "#999" }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => fmt(v)}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "#000",
+                  border: "none",
+                  borderRadius: 0,
+                  padding: "8px 12px",
+                  fontSize: 12,
                 }}
-              >
-                {day.views > 0 && !isFuture && (
-                  <div style={{ fontSize: 9, fontWeight: 600, color: "#000", marginBottom: 4 }}>
-                    {day.views}
-                  </div>
-                )}
-                <div
-                  style={{
-                    width: day.views > 0 && !isFuture ? "50%" : "100%",
-                    maxWidth: day.views > 0 && !isFuture ? 24 : "none",
-                    minWidth: day.views > 0 && !isFuture ? 8 : 0,
-                    height: day.views > 0 && !isFuture ? `${height}%` : "1px",
-                    background: day.views > 0 && !isFuture ? "#000" : "#eee",
-                    borderRadius: day.views > 0 && !isFuture ? "2px 2px 0 0" : 0,
-                    transition: "height 0.2s ease"
-                  }}
-                  title={isFuture ? `${day.date}: upcoming` : `${day.date}: ${day.views} views`}
-                />
-              </div>
-              <div style={{
-                fontSize: 9,
-                color: isToday ? "#000" : "#999",
-                fontWeight: isToday ? 700 : 400,
-              }}>
-                {isToday ? "TODAY" : dayNum}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Page indicator */}
-      <div style={{ display: "flex", justifyContent: "center", gap: 4, marginTop: 16 }}>
-        {Array.from({ length: totalPages }).map((_, i) => (
-          <div
-            key={i}
-            onClick={() => setPage(i)}
-            style={{
-              width: i === page ? 16 : 6,
-              height: 6,
-              background: i === page ? "#000" : "#e6e6e6",
-              cursor: "pointer",
-              transition: "all 0.2s",
-            }}
-          />
-        ))}
+                labelStyle={{ color: "#999", fontSize: 10, marginBottom: 4 }}
+                itemStyle={{ color: "#fff" }}
+                labelFormatter={(label) => formatDate(label as string)}
+                formatter={(value: number) => [fmt(value), title]}
+              />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke="#000"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, fill: "#000", stroke: "#fff", strokeWidth: 2 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div style={{ display: "grid", placeItems: "center", height: "100%", color: "#ccc", fontSize: 11 }}>
+            No data for this period
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+// ── Metric Card ──────────────────────────────────────
+function MetricCard({ label, value, comparison, isMobile }: { label: string; value: string; comparison: string; isMobile: boolean }) {
+  return (
+    <div style={{ border: "1px solid #e6e6e6", padding: isMobile ? 14 : 20 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#999", marginBottom: 8 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, letterSpacing: -0.5 }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>
+        {comparison}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
 export default function SellerDashboard() {
   const router = useRouter();
   const isMobile = useIsMobile();
@@ -204,13 +225,52 @@ export default function SellerDashboard() {
   const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
   const [stripeConnected, setStripeConnected] = useState(false);
   const [stripePayoutsEnabled, setStripePayoutsEnabled] = useState(false);
+  const [stripeAvailable, setStripeAvailable] = useState(0);
+  const [stripePending, setStripePending] = useState(0);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [dateRange, setDateRange] = useState<DateRange>("7d");
+
+  // Computed stats based on date range
+  const currentPeriod = useMemo(() => filterByRange(dailyStats, dateRange), [dailyStats, dateRange]);
+  const previousPeriod = useMemo(() => getPreviousPeriod(dailyStats, dateRange), [dailyStats, dateRange]);
+
+  const periodSales = useMemo(() => sumField(currentPeriod, "sales"), [currentPeriod]);
+  const prevSales = useMemo(() => sumField(previousPeriod, "sales"), [previousPeriod]);
+  const periodOrders = useMemo(() => sumField(currentPeriod, "orders"), [currentPeriod]);
+  const prevOrders = useMemo(() => sumField(previousPeriod, "orders"), [previousPeriod]);
+  const periodPageViews = useMemo(() => sumField(currentPeriod, "page_views"), [currentPeriod]);
+  const prevPageViews = useMemo(() => sumField(previousPeriod, "page_views"), [previousPeriod]);
+  const periodProductViews = useMemo(() => sumField(currentPeriod, "product_views"), [currentPeriod]);
+  const prevProductViews = useMemo(() => sumField(previousPeriod, "product_views"), [previousPeriod]);
+
+  // Chart data
+  const viewsChartData = useMemo(() =>
+    currentPeriod.map(s => ({ date: s.date, value: s.page_views + s.product_views })),
+    [currentPeriod]
+  );
+  const ordersChartData = useMemo(() =>
+    currentPeriod.map(s => ({ date: s.date, value: s.orders })),
+    [currentPeriod]
+  );
+  const salesChartData = useMemo(() =>
+    currentPeriod.map(s => ({ date: s.date, value: Number((s.sales / 100).toFixed(2)) })),
+    [currentPeriod]
+  );
+
+  // Today stats
+  const todayStr = new Date().toISOString().split("T")[0];
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayStr = yesterdayDate.toISOString().split("T")[0];
+  const todayStat = dailyStats.find(s => s.date === todayStr);
+  const yesterdayStat = dailyStats.find(s => s.date === yesterdayStr);
+  const todaySalesVal = (todayStat?.sales || 0) / 100;
+  const yesterdaySalesVal = (yesterdayStat?.sales || 0) / 100;
 
   useEffect(() => {
     checkSellerAndLoad();
-    loadNotifications();
   }, []);
 
   async function checkSellerAndLoad() {
@@ -236,23 +296,42 @@ export default function SellerDashboard() {
       return;
     }
 
-    await loadStats(user.id);
-    await loadRecentOrders(user.id);
-    setLoading(false);
-  }
+    const { data: { session } } = await supabase.auth.getSession();
 
-  async function loadNotifications() {
-    if (!supabase) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("read", false)
-      .order("created_at", { ascending: false })
-      .limit(20);
-    setNotifications(data || []);
+    await Promise.all([
+      // Fetch Stripe status + balance from API
+      session ? fetch("/api/stripe/connect", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      }).then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          if (data.connected) {
+            setStripeConnected(true);
+            setStripePayoutsEnabled(data.payouts_enabled || false);
+            if (data.balance) {
+              const avail = data.balance.available?.reduce((sum: number, b: { amount: number }) => sum + b.amount, 0) || 0;
+              const pend = data.balance.pending?.reduce((sum: number, b: { amount: number }) => sum + b.amount, 0) || 0;
+              setStripeAvailable(avail);
+              setStripePending(pend);
+            }
+          }
+        }
+      }).catch(() => {}) : Promise.resolve(),
+      loadStats(user.id),
+      loadRecentOrders(user.id),
+      Promise.resolve(
+        supabase
+          .from("notifications")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("read", false)
+          .order("created_at", { ascending: false })
+          .limit(20)
+      ).then(({ data }) => {
+        setNotifications(data || []);
+      }).catch(() => {}),
+    ]);
+    setLoading(false);
   }
 
   async function markNotificationRead(id: string) {
@@ -287,15 +366,12 @@ export default function SellerDashboard() {
   async function loadStats(userId: string) {
     if (!supabase) return;
 
-    // Try to get brand data with stats columns
     const { data: brandsData, error: brandsError } = await supabase
       .from("brands")
       .select("id, name, slug, balance, total_sales, total_orders, page_views, product_views, total_favorites")
       .eq("owner_id", userId);
 
-    // If query failed (columns don't exist), try basic query
     if (brandsError) {
-      console.error("Extended query failed, trying basic:", brandsError.message);
       const { data: basicBrands } = await supabase
         .from("brands")
         .select("id, name, slug")
@@ -303,35 +379,20 @@ export default function SellerDashboard() {
 
       if (basicBrands && basicBrands.length > 0) {
         const mappedBrands = basicBrands.map(b => ({
-          id: b.id,
-          name: b.name,
-          slug: b.slug,
-          balance: 0,
-          total_sales: 0,
-          total_orders: 0,
-          page_views: 0,
-          product_views: 0,
-          total_favorites: 0,
+          id: b.id, name: b.name, slug: b.slug,
+          balance: 0, total_sales: 0, total_orders: 0, page_views: 0, product_views: 0, total_favorites: 0,
         }));
         setBrands(mappedBrands);
         setBrandCount(mappedBrands.length);
       }
     } else if (brandsData && brandsData.length > 0) {
       const mappedBrands = brandsData.map(b => ({
-        id: b.id,
-        name: b.name,
-        slug: b.slug,
-        balance: b.balance || 0,
-        total_sales: b.total_sales || 0,
-        total_orders: b.total_orders || 0,
-        page_views: b.page_views || 0,
-        product_views: b.product_views || 0,
-        total_favorites: b.total_favorites || 0,
+        id: b.id, name: b.name, slug: b.slug,
+        balance: b.balance || 0, total_sales: b.total_sales || 0, total_orders: b.total_orders || 0,
+        page_views: b.page_views || 0, product_views: b.product_views || 0, total_favorites: b.total_favorites || 0,
       }));
       setBrands(mappedBrands);
       setBrandCount(mappedBrands.length);
-
-      // Calculate totals
       setTotalBalance(mappedBrands.reduce((sum, b) => sum + b.balance, 0));
       setTotalSales(mappedBrands.reduce((sum, b) => sum + b.total_sales, 0));
       setTotalOrders(mappedBrands.reduce((sum, b) => sum + b.total_orders, 0));
@@ -340,61 +401,40 @@ export default function SellerDashboard() {
       setTotalFavorites(mappedBrands.reduce((sum, b) => sum + b.total_favorites, 0));
     }
 
-    // Get total brands count for ranking
-    const { count: totalCount } = await supabase
-      .from("brands")
-      .select("id", { count: "exact", head: true });
-    setTotalBrandsCount(totalCount || 0);
-    setSalesRank(1);
-
-    // Try to load daily stats for chart
     const brandIds = (brandsData || []).map(b => b.id);
-    if (brandIds.length > 0) {
-      const sixtyDaysAgo = new Date();
-      sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    // Fetch 180 days for previous period comparison at 90d range
+    const fetchDate = new Date();
+    fetchDate.setDate(fetchDate.getDate() - 180);
 
-      const { data: statsData, error: statsError } = await supabase
-        .from("brand_daily_stats")
-        .select("date, page_views, product_views, orders, sales")
-        .in("brand_id", brandIds)
-        .gte("date", sixtyDaysAgo.toISOString().split("T")[0])
-        .order("date", { ascending: true });
+    const [totalCountRes, productsCountRes, pendingRes, approvedRes, statsRes] = await Promise.all([
+      supabase.from("brands").select("id", { count: "exact", head: true }),
+      supabase.from("products").select("*", { count: "exact", head: true }).eq("owner_id", userId),
+      supabase.from("products").select("*", { count: "exact", head: true }).eq("owner_id", userId).eq("status", "pending"),
+      supabase.from("products").select("*", { count: "exact", head: true }).eq("owner_id", userId).eq("status", "approved"),
+      brandIds.length > 0
+        ? supabase.from("brand_daily_stats").select("date, page_views, product_views, orders, sales").in("brand_id", brandIds).gte("date", fetchDate.toISOString().split("T")[0]).order("date", { ascending: true })
+        : Promise.resolve({ data: null, error: null }),
+    ]);
 
-      if (!statsError && statsData) {
-        // Aggregate by date
-        const byDate: Record<string, { date: string; page_views: number; product_views: number; orders: number; sales: number }> = {};
-        statsData.forEach(s => {
-          if (!byDate[s.date]) {
-            byDate[s.date] = { date: s.date, page_views: 0, product_views: 0, orders: 0, sales: 0 };
-          }
-          byDate[s.date].page_views += s.page_views || 0;
-          byDate[s.date].product_views += s.product_views || 0;
-          byDate[s.date].orders += s.orders || 0;
-          byDate[s.date].sales += s.sales || 0;
-        });
-        setDailyStats(Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)));
-      }
+    setTotalBrandsCount(totalCountRes.count || 0);
+    setSalesRank(1);
+    setProductCount(productsCountRes.count || 0);
+    setPendingCount(pendingRes.count || 0);
+    setApprovedCount(approvedRes.count || 0);
+
+    if (!statsRes.error && statsRes.data) {
+      const byDate: Record<string, DailyStats> = {};
+      statsRes.data.forEach((s: any) => {
+        if (!byDate[s.date]) {
+          byDate[s.date] = { date: s.date, page_views: 0, product_views: 0, orders: 0, sales: 0 };
+        }
+        byDate[s.date].page_views += s.page_views || 0;
+        byDate[s.date].product_views += s.product_views || 0;
+        byDate[s.date].orders += s.orders || 0;
+        byDate[s.date].sales += s.sales || 0;
+      });
+      setDailyStats(Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)));
     }
-
-    const { count: productsCount } = await supabase
-      .from("products")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", userId);
-    setProductCount(productsCount || 0);
-
-    const { count: pending } = await supabase
-      .from("products")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", userId)
-      .eq("status", "pending");
-    setPendingCount(pending || 0);
-
-    const { count: approved } = await supabase
-      .from("products")
-      .select("*", { count: "exact", head: true })
-      .eq("owner_id", userId)
-      .eq("status", "approved");
-    setApprovedCount(approved || 0);
   }
 
   if (loading) {
@@ -406,18 +446,17 @@ export default function SellerDashboard() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 32 }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+    <div style={{ display: "grid", gap: 0 }}>
+      {/* ── Header ──────────────────────────────────────── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 28 }}>
         <div>
           <div style={{ fontSize: 10, color: "#999", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>
             SELLER DASHBOARD
           </div>
-          <h1 style={{ fontSize: 32, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: -0.5 }}>
             My Shop
           </h1>
         </div>
-
         {/* Notification Bell */}
         <div style={{ position: "relative" }}>
           <button
@@ -443,7 +482,6 @@ export default function SellerDashboard() {
               </div>
             )}
           </button>
-
           {showNotifications && (
             <div style={{
               position: "absolute", top: "calc(100% + 8px)", right: 0,
@@ -458,13 +496,9 @@ export default function SellerDashboard() {
                   Notifications
                 </span>
                 {notifications.length > 0 && (
-                  <button
-                    onClick={markAllRead}
-                    style={{
-                      background: "none", border: "none", fontSize: 10,
-                      color: "#666", cursor: "pointer", textDecoration: "underline",
-                    }}
-                  >
+                  <button onClick={markAllRead} style={{
+                    background: "none", border: "none", fontSize: 10, color: "#666", cursor: "pointer", textDecoration: "underline",
+                  }}>
                     Mark all read
                   </button>
                 )}
@@ -476,21 +510,15 @@ export default function SellerDashboard() {
                   </div>
                 ) : (
                   notifications.map(n => (
-                    <div
-                      key={n.id}
-                      onClick={() => markNotificationRead(n.id)}
-                      style={{
-                        padding: "12px 16px", borderBottom: "1px solid #f0f0f0",
-                        cursor: "pointer", transition: "background 0.15s",
-                      }}
+                    <div key={n.id} onClick={() => markNotificationRead(n.id)} style={{
+                      padding: "12px 16px", borderBottom: "1px solid #f0f0f0", cursor: "pointer", transition: "background 0.15s",
+                    }}
                       onMouseEnter={e => (e.currentTarget.style.background = "#fafafa")}
                       onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
                     >
                       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{n.title}</div>
                       <div style={{ fontSize: 11, color: "#666" }}>{n.message}</div>
-                      <div style={{ fontSize: 9, color: "#999", marginTop: 4 }}>
-                        {new Date(n.created_at).toLocaleString()}
-                      </div>
+                      <div style={{ fontSize: 9, color: "#999", marginTop: 4 }}>{new Date(n.created_at).toLocaleString()}</div>
                     </div>
                   ))
                 )}
@@ -500,74 +528,34 @@ export default function SellerDashboard() {
         </div>
       </div>
 
-      {/* Main Stats - Highlighted */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-        <div style={{ background: "#000", color: "#fff", padding: isMobile ? 16 : 28 }}>
-          <div style={{ fontSize: isMobile ? 9 : 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.6, marginBottom: isMobile ? 8 : 12 }}>
-            BALANCE
-          </div>
-          <div style={{ fontSize: isMobile ? 22 : 36, fontWeight: 800, letterSpacing: -1 }}>
-            €{(totalBalance / 100).toFixed(2)}
-          </div>
-        </div>
-        <div style={{ background: "#000", color: "#fff", padding: isMobile ? 16 : 28 }}>
-          <div style={{ fontSize: isMobile ? 9 : 11, textTransform: "uppercase", letterSpacing: 1, opacity: 0.6, marginBottom: isMobile ? 8 : 12 }}>
-            TOTAL SALES
-          </div>
-          <div style={{ fontSize: isMobile ? 22 : 36, fontWeight: 800, letterSpacing: -1 }}>
-            €{(totalSales / 100).toFixed(2)}
-          </div>
-        </div>
-      </div>
-
-      {/* Stripe Connect Banner */}
+      {/* ── Stripe Connect Banners ──────────────────────── */}
       {!stripeConnected && (
-        <Link
-          href="/account/seller/stripe"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "16px 20px",
-            background: "#fef3c7",
-            border: "1px solid #fcd34d",
-            textDecoration: "none",
-            color: "#92400e",
-          }}
-        >
+        <Link href="/account/seller/stripe" style={{ marginTop: 8,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "20px 24px", background: "#fef2f2", border: "2px solid #fca5a5",
+          textDecoration: "none", color: "#991b1b",
+        }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>Connect Stripe to receive payments</div>
-              <div style={{ fontSize: 11, opacity: 0.8 }}>Set up payouts to start earning</div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>Connect Stripe to start selling</div>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Customers cannot buy your products until you connect Stripe</div>
             </div>
           </div>
-          <span style={{ fontSize: 14 }}>→</span>
+          <span style={{ fontSize: 16, fontWeight: 700 }}>→</span>
         </Link>
       )}
-
       {stripeConnected && !stripePayoutsEnabled && (
-        <Link
-          href="/account/seller/stripe"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "16px 20px",
-            background: "#fef3c7",
-            border: "1px solid #fcd34d",
-            textDecoration: "none",
-            color: "#92400e",
-          }}
-        >
+        <Link href="/account/seller/stripe" style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "16px 20px", background: "#fef3c7", border: "1px solid #fcd34d",
+          textDecoration: "none", color: "#92400e",
+        }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
+              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
             </svg>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600 }}>Stripe payouts pending</div>
@@ -578,50 +566,174 @@ export default function SellerDashboard() {
         </Link>
       )}
 
-      {/* Secondary Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(5, 1fr)", gap: 2 }}>
-        <div style={{ background: "#f5f5f5", padding: isMobile ? 12 : 20 }}>
-          <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700 }}>#{salesRank || "-"}</div>
-          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
-            Rank / {totalBrandsCount}
+      {/* ── Today ───────────────────────────────────────── */}
+      <div style={{ background: "#000", color: "#fff", padding: isMobile ? 24 : 36, marginTop: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>
+              Today
+            </div>
+            <div style={{ fontSize: isMobile ? 36 : 48, fontWeight: 800, letterSpacing: -1.5, lineHeight: 1 }}>
+              €{todaySalesVal.toFixed(2)}
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 8 }}>Gross volume</div>
           </div>
-        </div>
-        <div style={{ background: "#f5f5f5", padding: isMobile ? 12 : 20 }}>
-          <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700 }}>{totalOrders}</div>
-          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
-            Orders
-          </div>
-        </div>
-        <div style={{ background: "#f5f5f5", padding: isMobile ? 12 : 20 }}>
-          <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700 }}>{totalPageViews}</div>
-          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
-            Page Views
-          </div>
-        </div>
-        <div style={{ background: "#f5f5f5", padding: isMobile ? 12 : 20 }}>
-          <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700 }}>{totalProductViews}</div>
-          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
-            Product Views
-          </div>
-        </div>
-        <div style={{ background: "#f5f5f5", padding: isMobile ? 12 : 20 }}>
-          <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 700 }}>{totalFavorites}</div>
-          <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
-            Favorites
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.5, color: "rgba(255,255,255,0.4)", marginBottom: 6 }}>
+              Yesterday
+            </div>
+            <div style={{ fontSize: isMobile ? 20 : 26, fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>
+              €{yesterdaySalesVal.toFixed(2)}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Views Chart */}
-      <ViewsChart dailyStats={dailyStats} isMobile={isMobile} />
+      {/* ── Balance ─────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 0, marginTop: 24 }}>
+        <Link href="/account/seller/stripe" style={{
+          border: "1px solid #e6e6e6", borderRight: isMobile ? "1px solid #e6e6e6" : "none",
+          padding: isMobile ? 18 : 28, textDecoration: "none", color: "#000",
+          transition: "background 0.15s",
+        }}
+          onMouseEnter={e => e.currentTarget.style.background = "#fafafa"}
+          onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+        >
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#999", marginBottom: 8 }}>
+            Total Earnings
+          </div>
+          <div style={{ fontSize: isMobile ? 24 : 32, fontWeight: 800, letterSpacing: -0.5 }}>
+            €{((totalBalance / 100) + stripeAvailable + stripePending).toFixed(2)}
+          </div>
+          <div style={{ fontSize: 11, color: "#666", marginTop: 10 }}>All time →</div>
+        </Link>
+        <Link href="/account/seller/stripe" style={{
+          border: "1px solid #e6e6e6", borderRight: isMobile ? "1px solid #e6e6e6" : "none",
+          borderTop: isMobile ? "none" : "1px solid #e6e6e6",
+          padding: isMobile ? 18 : 28, textDecoration: "none", color: "#000",
+          transition: "background 0.15s",
+        }}
+          onMouseEnter={e => e.currentTarget.style.background = "#fafafa"}
+          onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+        >
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#999", marginBottom: 8 }}>
+            Stripe Available
+          </div>
+          <div style={{ fontSize: isMobile ? 24 : 32, fontWeight: 800, letterSpacing: -0.5 }}>
+            €{stripeAvailable.toFixed(2)}
+          </div>
+          <div style={{ fontSize: 11, color: "#666", marginTop: 10 }}>
+            {stripePending > 0 ? `€${stripePending.toFixed(2)} pending` : "View details →"}
+          </div>
+        </Link>
+        <Link href="/account/seller/stripe" style={{
+          border: "1px solid #e6e6e6",
+          borderTop: isMobile ? "none" : "1px solid #e6e6e6",
+          padding: isMobile ? 18 : 28, textDecoration: "none", color: "#000",
+          transition: "background 0.15s",
+        }}
+          onMouseEnter={e => e.currentTarget.style.background = "#fafafa"}
+          onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+        >
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#999", marginBottom: 8 }}>
+            Pre-Stripe Balance
+          </div>
+          <div style={{ fontSize: isMobile ? 24 : 32, fontWeight: 800, letterSpacing: -0.5 }}>
+            €{(totalBalance / 100).toFixed(2)}
+          </div>
+          <div style={{ fontSize: 11, color: "#666", marginTop: 10 }}>
+            {stripeConnected && stripePayoutsEnabled ? "Payouts enabled" : "View settings →"}
+          </div>
+        </Link>
+      </div>
 
-      {/* Export Button */}
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      {/* ── Your Overview ───────────────────────────────── */}
+      <div style={{ marginTop: 40 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.3 }}>
+            Your overview
+          </div>
+          <DateRangeSelector value={dateRange} onChange={setDateRange} />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)", gap: isMobile ? 8 : 12 }}>
+          <MetricCard
+            label="Gross Volume"
+            value={`€${(periodSales / 100).toFixed(2)}`}
+            comparison={`${calcChange(periodSales, prevSales)} previous period`}
+            isMobile={isMobile}
+          />
+          <MetricCard
+            label="Orders"
+            value={String(periodOrders)}
+            comparison={`${calcChange(periodOrders, prevOrders)} previous period`}
+            isMobile={isMobile}
+          />
+          <MetricCard
+            label="Page Views"
+            value={String(periodPageViews)}
+            comparison={`${calcChange(periodPageViews, prevPageViews)} previous period`}
+            isMobile={isMobile}
+          />
+          <MetricCard
+            label="Product Views"
+            value={String(periodProductViews)}
+            comparison={`${calcChange(periodProductViews, prevProductViews)} previous period`}
+            isMobile={isMobile}
+          />
+          <MetricCard
+            label="Favorites"
+            value={String(totalFavorites)}
+            comparison={`${totalOrders} total orders`}
+            isMobile={isMobile}
+          />
+          <MetricCard
+            label="Rank"
+            value={`#${salesRank || "-"}`}
+            comparison={`of ${totalBrandsCount} brands`}
+            isMobile={isMobile}
+          />
+        </div>
+      </div>
+
+      {/* ── Line Charts ─────────────────────────────────── */}
+      <div style={{ marginTop: 32 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.3, marginBottom: 20 }}>
+          Analytics
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 8 : 12 }}>
+          <StripeLineChart
+            data={viewsChartData}
+            title="Views"
+            currentValue={String(periodPageViews + periodProductViews)}
+            comparisonText={`${calcChange(periodPageViews + periodProductViews, prevPageViews + prevProductViews)} prev`}
+            isMobile={isMobile}
+          />
+          <StripeLineChart
+            data={ordersChartData}
+            title="Orders"
+            currentValue={String(periodOrders)}
+            comparisonText={`${calcChange(periodOrders, prevOrders)} prev`}
+            isMobile={isMobile}
+          />
+        </div>
+        <div style={{ marginTop: isMobile ? 8 : 12 }}>
+          <StripeLineChart
+            data={salesChartData}
+            title="Sales"
+            currentValue={`€${(periodSales / 100).toFixed(2)}`}
+            comparisonText={`${calcChange(periodSales, prevSales)} prev`}
+            formatValue={(v) => `€${v}`}
+            isMobile={isMobile}
+          />
+        </div>
+      </div>
+
+      {/* ── Export ───────────────────────────────────────── */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
         <button
           onClick={() => {
             const wb = XLSX.utils.book_new();
-
-            // Summary sheet
             const summaryData = [
               ["Seller Analytics Report"],
               ["Generated:", new Date().toLocaleString()],
@@ -646,62 +758,31 @@ export default function SellerDashboard() {
             const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
             summarySheet["!cols"] = [{ wch: 20 }, { wch: 25 }];
             XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
-
-            // Brands sheet
             if (brands.length > 0) {
-              const brandsData = [
+              const bData = [
                 ["Brand", "Sales (€)", "Orders", "Page Views", "Product Views", "Favorites", "Balance (€)"],
-                ...brands.map(b => [
-                  b.name,
-                  Number((b.total_sales / 100).toFixed(2)),
-                  b.total_orders,
-                  b.page_views,
-                  b.product_views,
-                  b.total_favorites,
-                  Number((b.balance / 100).toFixed(2)),
-                ])
+                ...brands.map(b => [b.name, Number((b.total_sales / 100).toFixed(2)), b.total_orders, b.page_views, b.product_views, b.total_favorites, Number((b.balance / 100).toFixed(2))])
               ];
-              const brandsSheet = XLSX.utils.aoa_to_sheet(brandsData);
-              brandsSheet["!cols"] = [{ wch: 25 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 12 }];
-              XLSX.utils.book_append_sheet(wb, brandsSheet, "Brands");
+              const bSheet = XLSX.utils.aoa_to_sheet(bData);
+              bSheet["!cols"] = [{ wch: 25 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 12 }];
+              XLSX.utils.book_append_sheet(wb, bSheet, "Brands");
             }
-
-            // Daily stats sheet
             if (dailyStats.length > 0) {
-              const dailyData = [
+              const dData = [
                 ["Date", "Page Views", "Product Views", "Total Views", "Orders", "Sales (€)"],
-                ...dailyStats.map(d => [
-                  d.date,
-                  d.page_views,
-                  d.product_views,
-                  d.page_views + d.product_views,
-                  d.orders,
-                  Number((d.sales / 100).toFixed(2)),
-                ])
+                ...dailyStats.map(d => [d.date, d.page_views, d.product_views, d.page_views + d.product_views, d.orders, Number((d.sales / 100).toFixed(2))])
               ];
-              const dailySheet = XLSX.utils.aoa_to_sheet(dailyData);
-              dailySheet["!cols"] = [{ wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 12 }];
-              XLSX.utils.book_append_sheet(wb, dailySheet, "Daily Stats");
+              const dSheet = XLSX.utils.aoa_to_sheet(dData);
+              dSheet["!cols"] = [{ wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 12 }];
+              XLSX.utils.book_append_sheet(wb, dSheet, "Daily Stats");
             }
-
-            // Download
             const brandName = brands[0]?.name?.replace(/[^a-zA-Z0-9]/g, "-") || "seller";
             XLSX.writeFile(wb, `${brandName}-analytics-${new Date().toISOString().split("T")[0]}.xlsx`);
           }}
           style={{
-            padding: "10px 20px",
-            background: "#fff",
-            color: "#000",
-            border: "1px solid #e6e6e6",
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: 0.5,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            transition: "all 0.15s",
+            padding: "10px 20px", background: "#fff", color: "#000", border: "1px solid #e6e6e6",
+            fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5,
+            cursor: "pointer", display: "flex", alignItems: "center", gap: 8, transition: "all 0.15s",
           }}
           onMouseEnter={(e) => { e.currentTarget.style.background = "#000"; e.currentTarget.style.color = "#fff"; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = "#000"; }}
@@ -715,8 +796,13 @@ export default function SellerDashboard() {
         </button>
       </div>
 
-      {/* Product Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 2 }}>
+      {/* ── Product Stats ───────────────────────────────── */}
+      <div style={{ borderTop: "1px solid #e6e6e6", marginTop: 24, paddingTop: 32 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.3, marginBottom: 20 }}>
+          Products
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 8 : 12 }}>
         <div style={{ border: "1px solid #e6e6e6", padding: isMobile ? 14 : 20, textAlign: "center" }}>
           <div style={{ fontSize: isMobile ? 20 : 28, fontWeight: 800 }}>{brandCount}</div>
           <div style={{ fontSize: isMobile ? 8 : 10, color: "#666", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>Brands</div>
@@ -735,178 +821,98 @@ export default function SellerDashboard() {
         </div>
       </div>
 
-      {/* Brands List */}
+      {/* ── Your Brands ─────────────────────────────────── */}
       {brands.length > 0 && (
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
-            YOUR BRANDS
+        <div style={{ border: "1px solid #e6e6e6", marginTop: 12 }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid #e6e6e6" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Your Brands</div>
           </div>
-          <div style={{ display: "grid", gap: 2 }}>
-            {brands.map((brand) => (
-              <Link
-                key={brand.id}
-                href={`/brand/${brand.slug}`}
-                style={{
-                  textDecoration: "none",
-                  color: "#000",
-                  padding: "16px 20px",
-                  background: "#fafafa",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  transition: "background 0.15s",
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = "#f0f0f0"}
-                onMouseLeave={(e) => e.currentTarget.style.background = "#fafafa"}
-              >
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{brand.name}</div>
-                  <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>
-                    {brand.page_views} views · {brand.total_orders} orders · €{(brand.total_sales / 100).toFixed(2)}
-                  </div>
+          {brands.map((brand) => (
+            <Link key={brand.id} href={`/brand/${brand.slug}`} style={{
+              textDecoration: "none", color: "#000", padding: "16px 20px",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              borderBottom: "1px solid #f0f0f0", transition: "background 0.15s",
+            }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#fafafa"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "#fff"}
+            >
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{brand.name}</div>
+                <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>
+                  {brand.page_views} views · {brand.total_orders} orders · €{(brand.total_sales / 100).toFixed(2)}
                 </div>
-                <span style={{ fontSize: 16, color: "#999" }}>→</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Recent Orders */}
-      {recentOrders.length > 0 && (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>
-              RECENT ORDERS
-            </div>
-            <Link href="/account/seller/orders" style={{ fontSize: 11, color: "#666", textDecoration: "none" }}>
-              View All →
+              </div>
+              <span style={{ fontSize: 16, color: "#999" }}>→</span>
             </Link>
-          </div>
-          <div style={{ display: "grid", gap: 2 }}>
-            {recentOrders.map((order: any) => (
-              <Link
-                key={order.id}
-                href="/account/seller/orders"
-                style={{
-                  textDecoration: "none", color: "#000",
-                  padding: "12px 16px", background: "#fafafa",
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  transition: "background 0.15s",
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = "#f0f0f0"}
-                onMouseLeave={e => e.currentTarget.style.background = "#fafafa"}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, color: "#999", fontFamily: "monospace", flexShrink: 0 }}>
-                    #{order.id.substring(0, 8)}
-                  </div>
-                  <div style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {order.customer_email}
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600 }}>
-                    {order.total_amount != null ? `€${(order.total_amount / 100).toFixed(2)}` : ""}
-                  </div>
-                  <div style={{
-                    fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5,
-                    padding: "2px 6px",
-                    background: order.status === "shipped" ? "#d4edda" : order.status === "pending" ? "#fff3cd" : "#e2e3e5",
-                    color: order.status === "shipped" ? "#155724" : order.status === "pending" ? "#856404" : "#383d41",
-                  }}>
-                    {order.status}
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
+          ))}
         </div>
       )}
 
-      {/* Quick Actions */}
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
-          ACTIONS
+      {/* ── Recent Orders ───────────────────────────────── */}
+      {recentOrders.length > 0 && (
+        <div style={{ border: "1px solid #e6e6e6", marginTop: 12 }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid #e6e6e6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Recent Orders</div>
+            <Link href="/account/seller/orders" style={{ fontSize: 11, color: "#666", textDecoration: "none" }}>View All →</Link>
+          </div>
+          {recentOrders.map((order: any) => (
+            <Link key={order.id} href="/account/seller/orders" style={{
+              textDecoration: "none", color: "#000", padding: "12px 20px",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              borderBottom: "1px solid #f0f0f0", transition: "background 0.15s",
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = "#fafafa"}
+              onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, color: "#999", fontFamily: "monospace", flexShrink: 0 }}>
+                  #{order.id.substring(0, 8)}
+                </div>
+                <div style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {order.customer_email}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>
+                  {order.total_amount != null ? `€${(order.total_amount / 100).toFixed(2)}` : ""}
+                </div>
+                <div style={{
+                  fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, padding: "2px 6px",
+                  background: order.status === "shipped" ? "#d4edda" : order.status === "pending" ? "#fff3cd" : "#e2e3e5",
+                  color: order.status === "shipped" ? "#155724" : order.status === "pending" ? "#856404" : "#383d41",
+                }}>{order.status}</div>
+              </div>
+            </Link>
+          ))}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 2 }}>
-          <Link
-            href="/account/seller/brands"
-            style={{
-              textDecoration: "none",
-              color: "#000",
-              padding: 20,
-              border: "1px solid #e6e6e6",
-              textAlign: "center",
-              transition: "all 0.15s",
+      )}
+
+      {/* ── Quick Actions ───────────────────────────────── */}
+      <div style={{ borderTop: "1px solid #e6e6e6", marginTop: 24, paddingTop: 32 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.3, marginBottom: 20 }}>
+          Quick Actions
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 8 : 2 }}>
+          {[
+            { href: "/account/seller/brands", label: "Manage Brands" },
+            { href: "/account/seller/products", label: "Manage Products" },
+            { href: "/account/seller/stripe", label: "Payment Settings", badge: stripeConnected && stripePayoutsEnabled },
+            { href: "/account/seller/orders", label: "View Orders" },
+          ].map(a => (
+            <Link key={a.href} href={a.href} style={{
+              textDecoration: "none", color: "#000", padding: 20, border: "1px solid #e6e6e6",
+              textAlign: "center", transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#000"; e.currentTarget.style.color = "#fff"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = "#000"; }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600 }}>Manage Brands</div>
-          </Link>
-          <Link
-            href="/account/seller/products"
-            style={{
-              textDecoration: "none",
-              color: "#000",
-              padding: 20,
-              border: "1px solid #e6e6e6",
-              textAlign: "center",
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#000"; e.currentTarget.style.color = "#fff"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = "#000"; }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600 }}>Manage Products</div>
-          </Link>
-          <Link
-            href="/account/seller/stripe"
-            style={{
-              textDecoration: "none",
-              color: "#000",
-              padding: 20,
-              border: "1px solid #e6e6e6",
-              textAlign: "center",
-              transition: "all 0.15s",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#000"; e.currentTarget.style.color = "#fff"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = "#000"; }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600 }}>Payment Settings</div>
-            {stripeConnected && stripePayoutsEnabled && (
-              <span style={{ color: "#22c55e", fontSize: 10 }}>●</span>
-            )}
-          </Link>
-          <Link
-            href="/account/seller/orders"
-            style={{
-              textDecoration: "none",
-              color: "#000",
-              padding: 20,
-              border: "1px solid #e6e6e6",
-              textAlign: "center",
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#000"; e.currentTarget.style.color = "#fff"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = "#000"; }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600 }}>View Orders</div>
-          </Link>
-          <Link
-            href="/account/seller/products/new"
-            style={{
-              textDecoration: "none",
-              color: "#fff",
-              padding: 20,
-              background: "#000",
-              textAlign: "center",
-            }}
-          >
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#000"; e.currentTarget.style.color = "#fff"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = "#000"; }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</div>
+              {a.badge && <span style={{ color: "#22c55e", fontSize: 10 }}>●</span>}
+            </Link>
+          ))}
+          <Link href="/account/seller/products/new" style={{
+            textDecoration: "none", color: "#fff", padding: 20, background: "#000", textAlign: "center",
+          }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>+ New Product</div>
           </Link>
         </div>

@@ -26,28 +26,44 @@ function PaymentForm({
   const stripe = useStripe();
   const elements = useElements();
   const [paying, setPaying] = useState(false);
+  const [elementReady, setElementReady] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!stripe || !elements || paying) return;
+    if (!stripe || !elements || paying || !elementReady) return;
 
     setPaying(true);
     onError("");
 
-    const { error } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/checkout/success`,
-      },
-    });
+    try {
+      // Submit the form data from Elements first
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        onError(submitError.message || "Payment validation failed");
+        setPaying(false);
+        return;
+      }
 
-    if (error) {
-      onError(error.message || "Payment failed");
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/checkout/success`,
+        },
+      });
+
+      if (error) {
+        onError(error.message || "Payment failed");
+        setPaying(false);
+      } else {
+        onSuccess();
+      }
+    } catch (err) {
+      onError("Payment failed. Please try again.");
       setPaying(false);
-    } else {
-      onSuccess();
     }
   }
+
+  const isDisabled = !stripe || !elementReady || paying;
 
   return (
     <form onSubmit={handleSubmit}>
@@ -56,26 +72,27 @@ function PaymentForm({
           options={{
             layout: "tabs",
           }}
+          onReady={() => setElementReady(true)}
         />
       </div>
 
       <button
         type="submit"
-        disabled={!stripe || paying}
+        disabled={isDisabled}
         style={{
           width: "100%",
           padding: "14px",
-          background: paying ? "#888" : "#000",
+          background: isDisabled ? "#888" : "#000",
           color: "#fff",
           border: "none",
           fontSize: 12,
           fontWeight: 700,
-          cursor: paying ? "not-allowed" : "pointer",
+          cursor: isDisabled ? "not-allowed" : "pointer",
           textTransform: "uppercase",
           letterSpacing: 1,
         }}
       >
-        {paying ? "PROCESSING..." : `PAY ${formatPrice(amount, currency)}`}
+        {paying ? "PROCESSING..." : !elementReady ? "LOADING..." : `PAY ${formatPrice(amount, currency)}`}
       </button>
     </form>
   );

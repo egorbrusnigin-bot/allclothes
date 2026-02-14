@@ -204,6 +204,36 @@ async function createOrderFromPaymentIntent(
         })
         .eq("id", brandId);
     }
+
+    // Update brand_daily_stats
+    const today = new Date().toISOString().split("T")[0];
+    const { data: existingStat } = await supabase
+      .from("brand_daily_stats")
+      .select("id, orders, sales")
+      .eq("brand_id", brandId)
+      .eq("date", today)
+      .single();
+
+    if (existingStat) {
+      await supabase
+        .from("brand_daily_stats")
+        .update({
+          orders: (existingStat.orders || 0) + 1,
+          sales: (existingStat.sales || 0) + Math.round(sellerAmount * 100),
+        })
+        .eq("id", existingStat.id);
+    } else {
+      await supabase
+        .from("brand_daily_stats")
+        .insert({
+          brand_id: brandId,
+          date: today,
+          page_views: 0,
+          product_views: 0,
+          orders: 1,
+          sales: Math.round(sellerAmount * 100),
+        });
+    }
   }
 
   // Notify seller about new order

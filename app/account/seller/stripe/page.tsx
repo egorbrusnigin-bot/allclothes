@@ -83,11 +83,11 @@ function SellerStripeContent() {
       const data = await res.json();
 
       if (!res.ok) {
-        if (data.error === "Seller not found" || data.error === "Seller not approved") {
-          router.push("/account/become-seller");
-          return;
-        }
-        throw new Error(data.error);
+        // Don't redirect - show error on page instead
+        setError(data.error || "Failed to load status");
+        setStatus({ connected: false, onboarding_complete: false, payouts_enabled: false, balance: null });
+        setLoading(false);
+        return;
       }
 
       setStatus(data);

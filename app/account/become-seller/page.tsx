@@ -43,6 +43,7 @@ function BecomeSellerContent() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [isAlreadySeller, setIsAlreadySeller] = useState(false);
+  const [sellerStatus, setSellerStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [importedFromShopify, setImportedFromShopify] = useState(false);
   const [shopifyImportUrl, setShopifyImportUrl] = useState("");
@@ -77,7 +78,7 @@ function BecomeSellerContent() {
   const [shippingCountry, setShippingCountry] = useState("");
   const [shippingPhone, setShippingPhone] = useState("");
 
-  // Load imported brand data from URL params
+  // Load imported brand data from URL params,
   useEffect(() => {
     const importedName = searchParams.get("brandName");
     const importedLogo = searchParams.get("brandLogo");
@@ -172,6 +173,8 @@ function BecomeSellerContent() {
     setImportedProducts(prev => prev.filter((_, i) => i !== index));
   }
 
+  // No auto-redirect to avoid loops
+
   // animation state for content
   const [entered, setEntered] = useState(false);
   useEffect(() => {
@@ -207,6 +210,7 @@ function BecomeSellerContent() {
 
       if (data && !error) {
         setIsAlreadySeller(true);
+        setSellerStatus(data.status || null);
         // Load existing data
         setBrandName(data.brand_name || "");
         setDescription(data.description || "");
@@ -386,16 +390,16 @@ function BecomeSellerContent() {
     );
   }
 
-  if (isAlreadySeller) {
+  if (isAlreadySeller && sellerStatus === "approved") {
     return (
       <main style={bg}>
         <div style={{ maxWidth: 760, margin: "0 auto", textAlign: "center", paddingTop: 40 }}>
-          <div style={{ fontSize: 48, marginBottom: 20 }}>✓</div>
+          <div style={{ fontSize: 48, marginBottom: 20 }}>&#10003;</div>
           <h1 style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, textTransform: "uppercase", letterSpacing: 1.5 }}>
-            YOU'RE ALREADY A SELLER!
+            YOU'RE ALREADY A SELLER
           </h1>
           <p style={{ fontSize: 11, color: "#666", marginBottom: 32, lineHeight: 1.6, letterSpacing: 0.3 }}>
-            You've already completed the seller registration. You can now manage your brands and products in the admin panel.
+            Your seller account is active. Go to your dashboard to manage your shop.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
             <Link
@@ -411,10 +415,10 @@ function BecomeSellerContent() {
                 textTransform: "uppercase",
               }}
             >
-              GO TO SELLER PANEL
+              GO TO DASHBOARD
             </Link>
             <Link
-              href="/account"
+              href="/account/seller/stripe"
               style={{
                 padding: "12px 24px",
                 background: "#fff",
@@ -427,9 +431,71 @@ function BecomeSellerContent() {
                 border: "1px solid #e6e6e6",
               }}
             >
-              BACK TO ACCOUNT
+              PAYMENT SETTINGS
             </Link>
           </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (isAlreadySeller && sellerStatus === "pending") {
+    return (
+      <main style={bg}>
+        <div style={{ maxWidth: 760, margin: "0 auto", textAlign: "center", paddingTop: 40 }}>
+          <div style={{ fontSize: 48, marginBottom: 20 }}>&#8987;</div>
+          <h1 style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, textTransform: "uppercase", letterSpacing: 1.5 }}>
+            APPLICATION PENDING
+          </h1>
+          <p style={{ fontSize: 11, color: "#666", marginBottom: 32, lineHeight: 1.6, letterSpacing: 0.3 }}>
+            Your seller application has been submitted and is awaiting review. We will notify you once it is approved.
+          </p>
+          <Link
+            href="/account"
+            style={{
+              padding: "12px 24px",
+              background: "#000",
+              color: "#fff",
+              textDecoration: "none",
+              fontWeight: 700,
+              fontSize: 11,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+            }}
+          >
+            BACK TO ACCOUNT
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (isAlreadySeller && sellerStatus === "rejected") {
+    return (
+      <main style={bg}>
+        <div style={{ maxWidth: 760, margin: "0 auto", textAlign: "center", paddingTop: 40 }}>
+          <div style={{ fontSize: 48, marginBottom: 20 }}>&#10007;</div>
+          <h1 style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, textTransform: "uppercase", letterSpacing: 1.5 }}>
+            APPLICATION REJECTED
+          </h1>
+          <p style={{ fontSize: 11, color: "#666", marginBottom: 32, lineHeight: 1.6, letterSpacing: 0.3 }}>
+            Unfortunately, your application was rejected. You can reapply with updated information.
+          </p>
+          <Link
+            href="/account"
+            style={{
+              padding: "12px 24px",
+              background: "#000",
+              color: "#fff",
+              textDecoration: "none",
+              fontWeight: 700,
+              fontSize: 11,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+            }}
+          >
+            BACK TO ACCOUNT
+          </Link>
         </div>
       </main>
     );
@@ -1436,22 +1502,33 @@ function BecomeSellerContent() {
 
         {step === 3 && (
           <>
-            <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>PAYOUT</div>
-            <div style={{ color: "#777", fontSize: 10, marginBottom: 14, letterSpacing: 0.3 }}>
-              This step will be payout details (later).
+            <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>PAYMENTS</div>
+            <div style={{ color: "#777", fontSize: 10, marginBottom: 20, letterSpacing: 0.3 }}>
+              We use Stripe Connect for secure payments. After your application is approved, you will need to connect your Stripe account to start receiving payments.
             </div>
 
-            {/* PayPal email */}
-            <div style={{ marginTop: 22 }}>
-              <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>PAYPAL EMAIL</div>
-              <div style={{ color: "#777", fontSize: 10, marginBottom: 10, letterSpacing: 0.3 }}>Where you want to receive payouts.</div>
-              <input
-                placeholder="paypal@email.com"
-                value={paypalEmail}
-                onChange={(e) => setPaypalEmail(e.target.value)}
-                type="email"
-                style={inputStyle}
-              />
+            {/* Stripe info */}
+            <div style={{ padding: 20, background: "#f5f5f5", border: "1px solid #e6e6e6", marginBottom: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                <svg width="40" height="16" viewBox="0 0 120 50" fill="none">
+                  <path d="M13.976 20.093c0-1.46 1.186-2.04 3.154-2.04 2.822 0 6.387.856 9.21 2.38V12.12c-3.082-1.223-6.127-1.708-9.21-1.708C10.42 10.412 5 14.233 5 20.576c0 9.876 13.594 8.3 13.594 12.558 0 1.726-1.5 2.28-3.594 2.28-3.11 0-7.085-1.28-10.233-3.003v8.46c3.485 1.5 7.005 2.13 10.233 2.13 7.046 0 11.886-3.478 11.886-10.01-.038-10.66-13.91-8.77-13.91-12.898z" fill="#635BFF"/>
+                </svg>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>Stripe Connect</div>
+              </div>
+              <div style={{ display: "grid", gap: 12 }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <div style={{ width: 20, height: 20, background: "#000", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>1</div>
+                  <div style={{ fontSize: 12, color: "#444" }}>Submit your application and wait for approval</div>
+                </div>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <div style={{ width: 20, height: 20, background: "#000", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>2</div>
+                  <div style={{ fontSize: 12, color: "#444" }}>Connect your Stripe account from Seller Dashboard</div>
+                </div>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <div style={{ width: 20, height: 20, background: "#000", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>3</div>
+                  <div style={{ fontSize: 12, color: "#444" }}>Start selling — 90% goes to you, 10% platform fee</div>
+                </div>
+              </div>
             </div>
 
             {/* Legal name */}

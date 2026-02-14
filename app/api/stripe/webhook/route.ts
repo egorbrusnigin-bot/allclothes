@@ -290,6 +290,9 @@ async function handlePaymentSucceeded(
     });
   }
 
+  // Update daily stats
+  await updateBrandDailyStats(supabase, brandId, sellerAmount);
+
   console.log("Order created successfully:", order.order_number);
 }
 
@@ -350,4 +353,44 @@ async function handlePayoutFailed(
     .eq("stripe_payout_id", payout.id);
 
   console.log("Payout failed:", payout.id);
+}
+
+// Update brand_daily_stats with new sale
+async function updateBrandDailyStats(
+  supabase: any,
+  brandId: string | null,
+  sellerAmount: number
+) {
+  if (!brandId) return;
+
+  const today = new Date().toISOString().split("T")[0];
+
+  // Check if row exists for today
+  const { data: existing } = await supabase
+    .from("brand_daily_stats")
+    .select("id, orders, sales")
+    .eq("brand_id", brandId)
+    .eq("date", today)
+    .single();
+
+  if (existing) {
+    await supabase
+      .from("brand_daily_stats")
+      .update({
+        orders: (existing.orders || 0) + 1,
+        sales: (existing.sales || 0) + Math.round(sellerAmount * 100),
+      })
+      .eq("id", existing.id);
+  } else {
+    await supabase
+      .from("brand_daily_stats")
+      .insert({
+        brand_id: brandId,
+        date: today,
+        page_views: 0,
+        product_views: 0,
+        orders: 1,
+        sales: Math.round(sellerAmount * 100),
+      });
+  }
 }

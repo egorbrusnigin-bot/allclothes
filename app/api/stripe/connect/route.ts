@@ -91,10 +91,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get seller record
+    // Get seller record (basic fields first)
     const { data: seller, error: sellerError } = await supabase
       .from("sellers")
-      .select("id, brand_name, email, country, city, status, stripe_account_id")
+      .select("id, brand_name, contact_email, country, city, status")
       .eq("user_id", user.id)
       .single();
 
@@ -106,14 +106,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Seller not approved" }, { status: 403 });
     }
 
-    let stripeAccountId = seller.stripe_account_id;
+    // Try to get stripe_account_id (may not exist if migration not applied)
+    let stripeAccountId: string | null = null;
+    const { data: stripeData } = await supabase
+      .from("sellers")
+      .select("stripe_account_id")
+      .eq("user_id", user.id)
+      .single();
+    if (stripeData) {
+      stripeAccountId = stripeData.stripe_account_id;
+    }
 
     // Create Stripe Connect account if doesn't exist
     if (!stripeAccountId) {
       const account = await stripe.accounts.create({
         type: "express",
         country: getCountryCode(seller.country),
-        email: seller.email || user.email || undefined,
+        email: seller.contact_email || user.email || undefined,
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
@@ -141,14 +150,60 @@ export async function POST(request: NextRequest) {
     // Create onboarding link
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://allclothes.store";
 
-    const accountLink = await stripe.accountLinks.create({
-      account: stripeAccountId,
-      refresh_url: `${baseUrl}/account/seller/stripe?refresh=1`,
-      return_url: `${baseUrl}/account/seller/stripe?success=1`,
-      type: "account_onboarding",
-    });
+    try {
+      const accountLink = await stripe.accountLinks.create({
+        account: stripeAccountId,
+        refresh_url: `${baseUrl}/account/seller/stripe?refresh=1`,
+        return_url: `${baseUrl}/account/seller/stripe?success=1`,
+        type: "account_onboarding",
+      });
 
-    return NextResponse.json({ url: accountLink.url });
+      return NextResponse.json({ url: accountLink.url });
+    } catch (linkError: any) {
+      // If the existing Stripe account is invalid/deactivated, create a new one
+      if (linkError?.type === "StripeInvalidRequestError") {
+        console.warn("Old Stripe account invalid, creating new one:", linkError.message);
+
+        const newAccount = await stripe.accounts.create({
+          type: "express",
+          country: getCountryCode(seller.country),
+          email: seller.contact_email || user.email || undefined,
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+          business_type: "individual",
+          business_profile: {
+            name: seller.brand_name,
+            product_description: "Fashion and clothing items",
+          },
+          metadata: {
+            seller_id: seller.id,
+            user_id: user.id,
+          },
+        });
+
+        // Update DB with new account ID, reset status
+        await supabase
+          .from("sellers")
+          .update({
+            stripe_account_id: newAccount.id,
+            stripe_onboarding_complete: false,
+            stripe_payouts_enabled: false,
+          })
+          .eq("id", seller.id);
+
+        const newLink = await stripe.accountLinks.create({
+          account: newAccount.id,
+          refresh_url: `${baseUrl}/account/seller/stripe?refresh=1`,
+          return_url: `${baseUrl}/account/seller/stripe?success=1`,
+          type: "account_onboarding",
+        });
+
+        return NextResponse.json({ url: newLink.url });
+      }
+      throw linkError;
+    }
   } catch (error) {
     console.error("Stripe Connect error:", error);
     return NextResponse.json(
@@ -186,15 +241,42 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get seller record
+    // First check seller exists with basic fields
+    const { data: basicSeller, error: basicError } = await supabase
+      .from("sellers")
+      .select("id, status")
+      .eq("user_id", user.id)
+      .single();
+
+    if (basicError || !basicSeller) {
+      return NextResponse.json({
+        connected: false,
+        onboarding_complete: false,
+        payouts_enabled: false,
+        balance: null,
+      });
+    }
+
+    if (basicSeller.status !== "approved") {
+      return NextResponse.json({ error: "Seller not approved" }, { status: 403 });
+    }
+
+    // Try to get stripe columns (may not exist if migration not applied)
     const { data: seller, error: sellerError } = await supabase
       .from("sellers")
       .select("stripe_account_id, stripe_onboarding_complete, stripe_payouts_enabled")
       .eq("user_id", user.id)
       .single();
 
+    // If stripe columns don't exist (migration not applied), return not connected
     if (sellerError || !seller) {
-      return NextResponse.json({ error: "Seller not found" }, { status: 404 });
+      return NextResponse.json({
+        connected: false,
+        onboarding_complete: false,
+        payouts_enabled: false,
+        balance: null,
+        migration_needed: true,
+      });
     }
 
     if (!seller.stripe_account_id) {

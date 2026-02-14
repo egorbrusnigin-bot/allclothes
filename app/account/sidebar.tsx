@@ -101,6 +101,7 @@ export default function Sidebar() {
   if (isSeller) {
     roleItems.push({ href: "/account/seller", label: "My Shop" });
     roleItems.push({ href: "/account/seller/orders", label: "Seller Orders" });
+    roleItems.push({ href: "/account/seller/stripe", label: "Payment Settings" });
     roleItems.push({ href: "/account/seller/gallery", label: "Gallery" });
   } else if (sellerStatus === "pending") {
     roleItems.push({ href: "/account/become-seller", label: "Application Pending" });

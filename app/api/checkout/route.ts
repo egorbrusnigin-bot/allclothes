@@ -133,20 +133,39 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (brand?.owner_id) {
-        const { data: seller } = await supabaseAdmin
+        // Get seller ID first (basic fields)
+        const { data: sellerBasic } = await supabaseAdmin
           .from("sellers")
-          .select("id, stripe_account_id, stripe_payouts_enabled")
+          .select("id")
           .eq("user_id", brand.owner_id)
           .single();
 
-        if (seller?.stripe_account_id && seller?.stripe_payouts_enabled) {
-          stripeAccountId = seller.stripe_account_id;
-          sellerId = seller.id;
+        if (sellerBasic) {
+          sellerId = sellerBasic.id;
+
+          // Try to get stripe fields (may not exist if migration not applied)
+          const { data: sellerStripe } = await supabaseAdmin
+            .from("sellers")
+            .select("stripe_account_id, stripe_payouts_enabled")
+            .eq("user_id", brand.owner_id)
+            .single();
+
+          if (sellerStripe?.stripe_account_id && sellerStripe?.stripe_payouts_enabled) {
+            stripeAccountId = sellerStripe.stripe_account_id;
+          }
         }
       }
     }
 
-    // ── 5. Create Stripe Payment Intent ─────────────────
+    // ── 5. Require Stripe Connect ───────────────────────
+    if (!stripeAccountId) {
+      return NextResponse.json(
+        { error: "This seller has not set up payments yet. Please try again later." },
+        { status: 400 }
+      );
+    }
+
+    // ── 6. Create Stripe Payment Intent ─────────────────
     const amountInCents = Math.round(serverTotal * 100);
     const platformFee = Math.round(amountInCents * 0.10); // 10% platform fee
 

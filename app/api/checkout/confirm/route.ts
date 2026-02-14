@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     const productIds = [...new Set(cartItems.map((i) => i.productId))];
     const { data: products } = await supabaseAdmin
       .from("products")
-      .select("id, price, status")
+      .select("id, price, status, brand_id")
       .in("id", productIds);
 
     if (!products) {
@@ -115,13 +115,27 @@ export async function POST(request: NextRequest) {
     // ── 6. Create order in Supabase ─────────────────────
     const currency = cartItems[0].currency;
 
+    // Get brand_id from products
+    const brandIds = new Set<string>();
+    for (const item of cartItems) {
+      const product = priceMap.get(item.productId) as any;
+      if (product?.brand_id) {
+        brandIds.add(product.brand_id);
+      }
+    }
+    const brandId = [...brandIds][0] || null;
+
     const { data: order, error: orderErr } = await supabaseAdmin
       .from("orders")
       .insert({
         user_id: user.id,
+        brand_id: brandId,
         status: "pending",
         total: serverTotal,
+        total_amount: Math.round(serverTotal * 100),
         currency,
+        payment_status: "paid",
+        payment_method: "card",
         notes: noteMarker,
       })
       .select("id, order_number")
@@ -182,6 +196,29 @@ export async function POST(request: NextRequest) {
             in_stock: newQuantity > 0,
           })
           .eq("id", sizeData.id);
+      }
+    }
+
+    // ── 9. Update brand balance and stats ────────────────
+    if (brandId) {
+      const platformFee = serverTotal * 0.1;
+      const sellerAmount = serverTotal - platformFee;
+
+      const { data: brand } = await supabaseAdmin
+        .from("brands")
+        .select("balance, total_sales, total_orders")
+        .eq("id", brandId)
+        .single();
+
+      if (brand) {
+        await supabaseAdmin
+          .from("brands")
+          .update({
+            balance: (brand.balance || 0) + sellerAmount * 100,
+            total_sales: (brand.total_sales || 0) + sellerAmount * 100,
+            total_orders: (brand.total_orders || 0) + 1,
+          })
+          .eq("id", brandId);
       }
     }
 
