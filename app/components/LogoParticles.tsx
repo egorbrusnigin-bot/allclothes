@@ -24,6 +24,8 @@ export default function LogoParticles() {
   const timerRef = useRef<number>(0);
   const logoImgRef = useRef<HTMLImageElement | null>(null);
   const canvasSizeRef = useRef({ width: 0, height: 0, offsetX: 0, offsetY: 0 });
+  const lastFrameRef = useRef<number>(0);
+  const isVisibleRef = useRef(true);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -31,6 +33,13 @@ export default function LogoParticles() {
 
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
+
+    // Pause animation when canvas is not visible
+    const observer = new IntersectionObserver(
+      ([entry]) => { isVisibleRef.current = entry.isIntersecting; },
+      { threshold: 0 }
+    );
+    observer.observe(canvas);
 
     const img = new Image();
     img.src = "/ALLCLOTHES.png";
@@ -117,7 +126,7 @@ export default function LogoParticles() {
       phaseRef.current = "assemble";
       timerRef.current = 0;
       setIsLoaded(true);
-      animate();
+      animate(0);
     };
 
     function scatterParticles() {
@@ -134,8 +143,21 @@ export default function LogoParticles() {
       });
     }
 
-    function animate() {
+    // Target ~30fps (33ms between frames) instead of 60fps
+    const FRAME_INTERVAL = 33;
+
+    function animate(timestamp: number) {
       if (!ctx || !canvas) return;
+
+      animationRef.current = requestAnimationFrame(animate);
+
+      // Skip frame if not visible
+      if (!isVisibleRef.current) return;
+
+      // Throttle to ~30fps
+      const elapsed = timestamp - lastFrameRef.current;
+      if (elapsed < FRAME_INTERVAL) return;
+      lastFrameRef.current = timestamp - (elapsed % FRAME_INTERVAL);
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -149,9 +171,9 @@ export default function LogoParticles() {
 
           if (dist > 0.5) {
             allSettled = false;
-            // Simple smooth lerp - no bouncing
-            p.x += dx * 0.08;
-            p.y += dy * 0.08;
+            // Stronger lerp to compensate for lower framerate
+            p.x += dx * 0.15;
+            p.y += dy * 0.15;
           } else {
             p.x = p.originX;
             p.y = p.originY;
@@ -178,7 +200,7 @@ export default function LogoParticles() {
         }
 
         timerRef.current++;
-        if (timerRef.current > 480) { // Hold for ~8 seconds
+        if (timerRef.current > 240) { // ~8 seconds at 30fps
           phaseRef.current = "scatter";
           timerRef.current = 0;
           scatterParticles();
@@ -187,27 +209,26 @@ export default function LogoParticles() {
         particlesRef.current.forEach((p) => {
           p.x += p.vx;
           p.y += p.vy;
-          p.vx *= 0.98;
-          p.vy *= 0.98;
+          p.vx *= 0.96;
+          p.vy *= 0.96;
 
           ctx.fillStyle = p.color;
           ctx.fillRect(p.x, p.y, p.size, p.size);
         });
 
         timerRef.current++;
-        if (timerRef.current > 80) { // Scatter for ~1.3 seconds
+        if (timerRef.current > 40) { // ~1.3 seconds at 30fps
           phaseRef.current = "assemble";
           timerRef.current = 0;
         }
       }
-
-      animationRef.current = requestAnimationFrame(animate);
     }
 
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
+      observer.disconnect();
     };
   }, []);
 

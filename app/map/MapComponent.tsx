@@ -59,25 +59,6 @@ export default function MapComponent({ brands }: MapComponentProps) {
       {brands.map((brand) => {
         if (!brand.latitude || !brand.longitude) return null;
 
-        // Fade out markers near the edge of the globe
-        const toRad = (d: number) => (d * Math.PI) / 180;
-        const dLat = toRad(brand.latitude - viewState.latitude);
-        const dLng = toRad(brand.longitude - viewState.longitude);
-        const a =
-          Math.sin(dLat / 2) ** 2 +
-          Math.cos(toRad(viewState.latitude)) *
-            Math.cos(toRad(brand.latitude)) *
-            Math.sin(dLng / 2) ** 2;
-        const angularDist = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        if (angularDist > Math.PI / 2) return null;
-
-        // Smooth fade: full opacity at center, fade near edges
-        const fadeStart = 1.1; // start fading at ~63°
-        const fadeEnd = Math.PI / 2; // fully hidden at 90°
-        const opacity = angularDist < fadeStart
-          ? 1
-          : 1 - (angularDist - fadeStart) / (fadeEnd - fadeStart);
-
         return (
           <Marker
             key={brand.id}
@@ -100,23 +81,15 @@ export default function MapComponent({ brands }: MapComponentProps) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 2px 12px rgba(0, 0, 0, 0.6)",
-                transition: "opacity 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease",
-                opacity: Math.max(0, opacity),
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "scale(1.15)";
-                e.currentTarget.style.boxShadow = "0 4px 16px rgba(0, 0, 0, 0.8)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "scale(1)";
-                e.currentTarget.style.boxShadow = "0 2px 12px rgba(0, 0, 0, 0.6)";
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.5)",
+                willChange: "transform",
               }}
             >
               {brand.logo_url ? (
                 <img
                   src={brand.logo_url}
                   alt={brand.name}
+                  loading="lazy"
                   style={{
                     width: isMobile ? 22 : 30,
                     height: isMobile ? 22 : 30,
@@ -260,13 +233,10 @@ export default function MapComponent({ brands }: MapComponentProps) {
         .mapboxgl-popup-content {
           padding: 0 !important;
           border-radius: 12px !important;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0,0,0,0.1) !important;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
           background: #fff !important;
-          backdrop-filter: blur(20px) !important;
-          -webkit-backdrop-filter: blur(20px) !important;
           border: 1px solid rgba(0, 0, 0, 0.08) !important;
           overflow: hidden !important;
-          transition: all 0.2s ease !important;
         }
 
         .maplibregl-popup-close-button,
