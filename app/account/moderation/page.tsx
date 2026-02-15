@@ -104,8 +104,11 @@ export default function ModerationPage() {
   const [filter, setFilter] = useState<"pending" | "all">("pending");
   const [rejectingProduct, setRejectingProduct] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
-  const [activeTab, setActiveTab] = useState<"products" | "sellers">("sellers");
+  const [activeTab, setActiveTab] = useState<"products" | "sellers" | "chats">("sellers");
   const [expandedSeller, setExpandedSeller] = useState<string | null>(null);
+  const [chats, setChats] = useState<any[]>([]);
+  const [selectedChat, setSelectedChat] = useState<any>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
 
   useEffect(() => {
     checkAdmin();
@@ -115,6 +118,7 @@ export default function ModerationPage() {
     if (adminCheck) {
       loadProducts();
       loadSellers();
+      loadChats();
     }
   }, [adminCheck, filter]);
 
@@ -186,6 +190,30 @@ export default function ModerationPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadChats() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/admin/chats", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json();
+      setChats(data.conversations || []);
+    } catch { /* ignore */ }
+  }
+
+  async function loadChatMessages(convId: string) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`/api/messages/${convId}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json();
+      setChatMessages(data.messages || []);
+    } catch { /* ignore */ }
   }
 
   async function handleApproveSeller(sellerId: string, seller: Seller) {
@@ -580,6 +608,24 @@ export default function ModerationPage() {
           }}
         >
           PRODUCTS {pendingProducts.length > 0 && <span style={{ background: "#f59e0b", color: "#fff", padding: "2px 6px", borderRadius: 10, fontSize: 9, marginLeft: 6 }}>{pendingProducts.length}</span>}
+        </button>
+        <button
+          onClick={() => setActiveTab("chats")}
+          style={{
+            padding: "12px 24px",
+            background: "transparent",
+            color: activeTab === "chats" ? "#000" : "#999",
+            border: "none",
+            borderBottom: activeTab === "chats" ? "2px solid #000" : "2px solid transparent",
+            marginBottom: -2,
+            cursor: "pointer",
+            fontSize: 11,
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: 1,
+          }}
+        >
+          CHATS {chats.length > 0 && <span style={{ background: "#6366f1", color: "#fff", padding: "2px 6px", borderRadius: 10, fontSize: 9, marginLeft: 6 }}>{chats.length}</span>}
         </button>
       </div>
 
@@ -1224,6 +1270,92 @@ export default function ModerationPage() {
         </div>
       )}
         </>
+      )}
+
+      {/* Chats Tab */}
+      {activeTab === "chats" && (
+        <div style={{ display: "flex", gap: 0, border: "1px solid #e6e6e6", minHeight: 500 }}>
+          {/* Chat list */}
+          <div style={{ width: isMobile ? (selectedChat ? 0 : "100%") : 320, borderRight: "1px solid #e6e6e6", overflowY: "auto", flexShrink: 0, display: isMobile && selectedChat ? "none" : "block" }}>
+            {chats.length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#999", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>
+                No chats yet
+              </div>
+            ) : (
+              chats.map((chat: any) => (
+                <div
+                  key={chat.id}
+                  onClick={() => { setSelectedChat(chat); loadChatMessages(chat.id); }}
+                  style={{
+                    padding: "14px 16px",
+                    borderBottom: "1px solid #f0f0f0",
+                    cursor: "pointer",
+                    background: selectedChat?.id === chat.id ? "#f5f5f5" : "transparent",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700 }}>{chat.buyerEmail || "Buyer"}</span>
+                    <span style={{ fontSize: 9, color: "#999" }}>{chat.messageCount || 0} msg</span>
+                  </div>
+                  <div style={{ fontSize: 10, color: "#666" }}>{chat.brandName || "Brand"}</div>
+                  {chat.orderNumber && <div style={{ fontSize: 9, color: "#999" }}>Order #{chat.orderNumber}</div>}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Chat messages (readonly) */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+            {selectedChat ? (
+              <>
+                <div style={{ padding: "12px 16px", borderBottom: "1px solid #e6e6e6", display: "flex", alignItems: "center", gap: 8 }}>
+                  {isMobile && (
+                    <button onClick={() => setSelectedChat(null)} style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer", padding: 0 }}>←</button>
+                  )}
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700 }}>{selectedChat.buyerEmail || "Buyer"} → {selectedChat.brandName || "Brand"}</div>
+                    {selectedChat.orderNumber && <div style={{ fontSize: 9, color: "#999" }}>Order #{selectedChat.orderNumber}</div>}
+                  </div>
+                </div>
+                <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+                  {chatMessages.length === 0 ? (
+                    <div style={{ textAlign: "center", color: "#ccc", fontSize: 11, paddingTop: 40, textTransform: "uppercase", letterSpacing: 1 }}>No messages</div>
+                  ) : (
+                    chatMessages.map((msg: any) => (
+                      <div key={msg.id} style={{ display: "flex", flexDirection: "column" }}>
+                        <div style={{
+                          padding: "8px 12px",
+                          borderRadius: 12,
+                          background: msg.isDeleted ? "transparent" : "#f5f5f5",
+                          border: msg.isDeleted ? "1px dashed #ddd" : "1px solid #e6e6e6",
+                          maxWidth: "80%",
+                          fontSize: 12,
+                          fontStyle: msg.isDeleted ? "italic" : "normal",
+                          color: msg.isDeleted ? "#999" : "#000",
+                        }}>
+                          <div style={{ fontSize: 9, color: "#999", marginBottom: 4, fontWeight: 600 }}>
+                            {msg.sender_id === selectedChat.buyer_id ? (selectedChat.buyerEmail || "Buyer") : "Seller"}
+                          </div>
+                          {msg.isDeleted ? "Message deleted" : msg.text}
+                        </div>
+                        <div style={{ fontSize: 8, color: "#ccc", marginTop: 2 }}>
+                          {new Date(msg.created_at).toLocaleString("ru")}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div style={{ padding: "8px 16px", borderTop: "1px solid #e6e6e6", fontSize: 10, color: "#999", textAlign: "center", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  Read-only admin view
+                </div>
+              </>
+            ) : (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#ccc", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>
+                Select a chat to view
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

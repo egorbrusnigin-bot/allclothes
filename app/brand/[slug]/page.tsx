@@ -248,6 +248,10 @@ export default function BrandPage() {
   const [, setCurrencyUpdate] = useState(0);
   const [analytics, setAnalytics] = useState<BrandAnalytics | null>(null);
   const [isOwner, setIsOwner] = useState(false);
+  const [brandReviews, setBrandReviews] = useState<any[]>([]);
+  const [brandAvgRating, setBrandAvgRating] = useState(0);
+  const [brandReviewTotal, setBrandReviewTotal] = useState(0);
+  const [brandRatingDist, setBrandRatingDist] = useState<Record<number, number>>({});
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -319,7 +323,21 @@ export default function BrandPage() {
       setProducts(productsData || []);
     }
 
+    // Load brand reviews
+    loadBrandReviews(brandData.id);
+
     setLoading(false);
+  }
+
+  async function loadBrandReviews(brandId: string) {
+    try {
+      const res = await fetch(`/api/reviews?brandId=${brandId}&limit=50`);
+      const data = await res.json();
+      setBrandReviews(data.reviews || []);
+      setBrandAvgRating(data.avgRating || 0);
+      setBrandReviewTotal(data.total || 0);
+      setBrandRatingDist(data.ratingDistribution || {});
+    } catch { /* ignore */ }
   }
 
   const isNew = (product: Product) => {
@@ -542,6 +560,103 @@ export default function BrandPage() {
           ))}
         </section>
       )}
+
+      {/* Reviews section */}
+      <div id="reviews" style={{ marginTop: isMobile ? 40 : 64, borderTop: "1px solid #e6e6e6", paddingTop: isMobile ? 24 : 40 }}>
+        <h2 style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, margin: 0, marginBottom: 24 }}>
+          ВСЕ ОТЗЫВЫ
+        </h2>
+
+        {brandReviewTotal > 0 ? (
+          <>
+            {/* Rating summary */}
+            <div style={{ display: "flex", gap: isMobile ? 20 : 40, alignItems: "flex-start", marginBottom: 32, flexWrap: "wrap" }}>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 48, fontWeight: 700, lineHeight: 1 }}>{brandAvgRating.toFixed(1)}</div>
+                <div style={{ fontSize: 16, letterSpacing: 1, marginTop: 4 }}>
+                  {"★".repeat(Math.round(brandAvgRating))}{"☆".repeat(5 - Math.round(brandAvgRating))}
+                </div>
+                <div style={{ fontSize: 10, color: "#999", marginTop: 4 }}>
+                  {brandReviewTotal} отзыв{brandReviewTotal === 1 ? "" : brandReviewTotal < 5 ? "а" : "ов"}
+                </div>
+              </div>
+
+              {/* Rating distribution bars */}
+              <div style={{ flex: 1, minWidth: 200, maxWidth: 300 }}>
+                {[5, 4, 3, 2, 1].map((star) => {
+                  const count = brandRatingDist[star] || 0;
+                  const pct = brandReviewTotal > 0 ? (count / brandReviewTotal) * 100 : 0;
+                  return (
+                    <div key={star} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, width: 20, textAlign: "right" }}>{star}★</span>
+                      <div style={{ flex: 1, height: 8, background: "#f0f0f0", position: "relative" }}>
+                        <div style={{ height: "100%", background: "#000", width: `${pct}%`, transition: "width 0.3s" }} />
+                      </div>
+                      <span style={{ fontSize: 10, color: "#999", width: 30 }}>{pct.toFixed(0)}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Review list */}
+            <div style={{ display: "grid", gap: 16 }}>
+              {brandReviews.map((review: any) => (
+                <div key={review.id} style={{ border: "1px solid #f0f0f0", padding: isMobile ? 14 : 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: "50%", background: "#f0f0f0",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 12, fontWeight: 700, color: "#666",
+                      }}>
+                        {(review.userEmail || "?").charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{review.userEmail || "Покупатель"}</div>
+                        <div style={{ fontSize: 12, color: "#000", letterSpacing: 0.5 }}>
+                          {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 10, color: "#999" }}>
+                      {new Date(review.created_at).toLocaleDateString("ru")}
+                    </div>
+                  </div>
+
+                  {/* Product info */}
+                  {review.product && (
+                    <Link
+                      href={`/product/${review.product.slug || review.product.id}`}
+                      style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", color: "#666", marginBottom: 8 }}
+                    >
+                      {review.product.image && (
+                        <img src={review.product.image} alt="" style={{ width: 32, height: 40, objectFit: "cover" }} />
+                      )}
+                      <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.3 }}>{review.product.name}</span>
+                    </Link>
+                  )}
+
+                  {review.text && (
+                    <div style={{ fontSize: 13, color: "#333", lineHeight: 1.5, marginTop: 4 }}>{review.text}</div>
+                  )}
+                  {review.images && review.images.length > 0 && (
+                    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                      {review.images.map((img: string, i: number) => (
+                        <img key={i} src={img} alt="" style={{ width: 64, height: 64, objectFit: "cover", border: "1px solid #eee" }} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={{ textAlign: "center", padding: "32px 0", color: "#ccc", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>
+            Пока нет отзывов
+          </div>
+        )}
+      </div>
     </main>
   );
 }
