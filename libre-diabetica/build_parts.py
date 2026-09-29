@@ -50,6 +50,13 @@ KEY_H = 0.2
 GLUE = 0.1                       # glue gap around the rib
 KEY_DEPTH = KEY_H + GLUE         # groove in the body, leaves 0.5 mm over the ring groove
 
+# FDM cap: same outline, but a flat face so it prints face down on the bed (the smoothest
+# surface FDM can give), a 45° edge instead of the round, no 0.15 mm engraving (a 0.4 mm
+# nozzle cannot draw it) and FDM clearances
+CAP_TOP = 4.99
+FDM_RIB = 0.5                    # 0.15 mm glue gap each side in the body groove
+FDM_SKIRT_IN = 17.1              # 0.2 mm around the body step
+
 # split clip ring (worn inside the shirt), modelled as printed = relaxed
 PRELOAD = 0.2         # ring presses the fabric outward against the lip by this much
 COLLAR = 1.0          # collar wall
@@ -95,6 +102,19 @@ def cap_part(cap):
     if abs(old.volume() - new.volume()) < 1e-4 and (old - new).volume() < 1e-4:
         return cap                                                        # already has this rib
     return (cap - under) + rib
+
+
+def cap_fdm_part():
+    profile = [
+        (0, TOP_Z), (FDM_SKIRT_IN, TOP_Z), (FDM_SKIRT_IN, STEP_Z), (R_OUT, STEP_Z),
+        (R_OUT, CAP_TOP - 0.8), (R_OUT - 0.8, CAP_TOP),             # 45° edge, no overhang face down
+        (2.5, CAP_TOP), (2.5, CAP_TOP - 0.5), (0.8, CAP_TOP - 0.5), (0.8, CAP_TOP - 1.1), (0, CAP_TOP - 1.1),
+    ]
+    mid = (KEY_IN + KEY_OUT) / 2
+    rib = [(mid - FDM_RIB / 2, TOP_Z - KEY_H), (mid + FDM_RIB / 2, TOP_Z - KEY_H),
+           (mid + FDM_RIB / 2, TOP_Z + 0.05), (mid - FDM_RIB / 2, TOP_Z + 0.05)]
+    return (Manifold.revolve(CrossSection([profile]), circular_segments=256)
+            + Manifold.revolve(CrossSection([rib]), circular_segments=256))
 
 
 def ring_geometry():
@@ -159,7 +179,7 @@ def groove_wall(z):
     return GROOVE_IN - 0.8 * max(0.0, 1.0 - z)
 
 
-def check(body, ring, cap):
+def check(body, ring, cap, cap_fdm):
     fo, fi, bo, hook_z, top = ring_geometry()
     ok = True
 
@@ -202,6 +222,12 @@ def check(body, ring, cap):
     skirt = 2 * math.pi * 17.0 * (TOP_Z - STEP_Z)
     area = flat + key + skirt
     line("  glue area", f"{area:.0f} mm2 (was 426), at 2 MPa ~{area * 2 / 9.81:.0f} kgf", area > 426)
+    print("  FDM cap on body:")
+    line("  watertight", cap_fdm.status().name, cap_fdm.status().name == "NoError")
+    clash = (cap_fdm ^ body).volume()
+    line("  does not overlap the body", f"{clash:.4f} mm3", clash < 1e-3)
+    line("  glue gap beside the rib", f"{(KEY_OUT - KEY_IN + 2 * GLUE - FDM_RIB) / 2:.2f} mm", (KEY_OUT - KEY_IN + 2 * GLUE - FDM_RIB) / 2 >= 0.149)
+    line("  skirt clearance", f"{FDM_SKIRT_IN - STEP_R:.2f} mm", FDM_SKIRT_IN - STEP_R >= 0.199)
     return ok
 
 
@@ -243,19 +269,21 @@ def main():
     v, i = unpack(data["cap"])
     body, ring = body_part(), ring_part()
     cap = cap_part(Manifold(Mesh(vert_properties=np.array(v, np.float32), tri_verts=np.array(i, np.uint32))))
-    if not check(body, ring, cap):
+    cap_fdm = cap_fdm_part()
+    if not check(body, ring, cap, cap_fdm):
         raise SystemExit("parts do not fit, nothing written")
 
     data["cap"] = packed(*as_arrays(cap))
     data["body"] = packed(*as_arrays(body))
     data["ring"] = packed(*as_arrays(ring))
+    data["cap_fdm"] = packed(*as_arrays(cap_fdm.rotate([180, 0, 0])))   # stored face down, as printed
     data["fit"] = {"fabric": FABRIC, "preload": PRELOAD, "hook": HOOK, "gap_deg": GAP_DEG}
     data["fabric"] = fabric_path()
     payload = json.dumps(data, separators=(",", ":"))
     PAGE.write_text(block.sub(lambda m: m.group(1) + payload + m.group(3), html, count=1), encoding="utf-8")
 
     STL_DIR.mkdir(exist_ok=True)
-    for name, key in (("1_cap_white", "cap"), ("2_body_clear", "body"), ("3_ring_inside", "ring")):
+    for name, key in (("1_cap_white", "cap"), ("1_cap_white_FDM", "cap_fdm"), ("2_body_clear", "body"), ("3_ring_inside", "ring")):
         write_stl(STL_DIR / f"libre_{name}.stl", *unpack(data[key]))
     print("written:", ", ".join(sorted(p.name for p in STL_DIR.glob("*.stl"))))
 
