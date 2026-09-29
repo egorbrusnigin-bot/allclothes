@@ -2,9 +2,10 @@
 """Rebuild the printable parts of the Libre diabetica replica.
 
 Regenerates the clear body and the clip ring, checks that they fit together
-through the fabric, writes print-ready STL files to ./stl and refreshes the
-meshes embedded in Libre_Diabetica_3D.html. The white cap and the NFC tag are
-kept exactly as they are in the page.
+through the fabric, adds the glue key between cap and body, writes print-ready
+STL files to ./stl and refreshes the meshes embedded in Libre_Diabetica_3D.html.
+The look of the white cap (dome, hub, engraving) and the NFC tag are kept as
+they are in the page; only a rib is added under the cap.
 
     pip install manifold3d numpy
     python3 build_parts.py
@@ -20,7 +21,7 @@ import struct
 from pathlib import Path
 
 import numpy as np
-from manifold3d import CrossSection, Manifold
+from manifold3d import CrossSection, Manifold, Mesh
 
 HERE = Path(__file__).resolve().parent
 PAGE = HERE / "Libre_Diabetica_3D.html"
@@ -42,6 +43,13 @@ LIP_R = 15.35         # the lip the ring hooks behind
 LIP_Z_IN, LIP_Z_OUT = 0.5, 0.39   # lip top slopes down outwards (dovetail), so a pull locks harder
 SLOPE = (LIP_Z_IN - LIP_Z_OUT) / 1.05   # ~6°, the hook face copies it
 
+# glue key: a rib under the cap sits in a groove on top of the body. It centres the
+# cap, holds a ring of glue and takes sideways knocks in shear instead of peel
+KEY_IN, KEY_OUT = 14.4, 15.0     # rib under the cap
+KEY_H = 0.2
+GLUE = 0.1                       # glue gap around the rib
+KEY_DEPTH = KEY_H + GLUE         # groove in the body, leaves 0.5 mm over the ring groove
+
 # split clip ring (worn inside the shirt), modelled as printed = relaxed
 PRELOAD = 0.2         # ring presses the fabric outward against the lip by this much
 COLLAR = 1.0          # collar wall
@@ -57,7 +65,10 @@ def body_part():
         (0, 0), (GROOVE_IN - 0.8, 0), (GROOVE_IN, 1.0), (GROOVE_IN, GROOVE_TOP),
         (CHAMBER_OUT, GROOVE_TOP), (CHAMBER_OUT, LIP_Z_OUT), (LIP_R, LIP_Z_IN),
         (LIP_R, 0.25), (lip_foot, 0), (17.2, 0), (R_OUT, 0.3), (R_OUT, STEP_Z),
-        (STEP_R, STEP_Z), (STEP_R, TOP_Z), (POCKET_R, TOP_Z), (POCKET_R, POCKET_Z), (0, POCKET_Z),
+        (STEP_R, STEP_Z), (STEP_R, TOP_Z),
+        (KEY_OUT + GLUE, TOP_Z), (KEY_OUT + GLUE, TOP_Z - KEY_DEPTH),       # glue groove
+        (KEY_IN - GLUE, TOP_Z - KEY_DEPTH), (KEY_IN - GLUE, TOP_Z),
+        (POCKET_R, TOP_Z), (POCKET_R, POCKET_Z), (0, POCKET_Z),
     ]
     solid = Manifold.revolve(CrossSection([profile]), circular_segments=RIBS * 4)
 
@@ -72,6 +83,18 @@ def body_part():
         return v
 
     return solid.warp_batch(ribs)
+
+
+def cap_part(cap):
+    """The cap from the page with the glue rib under it (an older rib is replaced)."""
+    under = Manifold.cylinder(TOP_Z, STEP_R + 0.05, STEP_R + 0.05, 256)   # nothing of the cap lives here
+    rib = [(KEY_IN + 0.05, TOP_Z - KEY_H), (KEY_OUT - 0.05, TOP_Z - KEY_H), (KEY_OUT, TOP_Z - KEY_H + 0.05),
+           (KEY_OUT, TOP_Z + 0.05), (KEY_IN, TOP_Z + 0.05), (KEY_IN, TOP_Z - KEY_H + 0.05)]
+    rib = Manifold.revolve(CrossSection([rib]), circular_segments=256)
+    old, new = cap ^ under, rib ^ under
+    if abs(old.volume() - new.volume()) < 1e-4 and (old - new).volume() < 1e-4:
+        return cap                                                        # already has this rib
+    return (cap - under) + rib
 
 
 def ring_geometry():
@@ -136,7 +159,7 @@ def groove_wall(z):
     return GROOVE_IN - 0.8 * max(0.0, 1.0 - z)
 
 
-def check(body, ring):
+def check(body, ring, cap):
     fo, fi, bo, hook_z, top = ring_geometry()
     ok = True
 
@@ -168,6 +191,17 @@ def check(body, ring):
         spare = CHAMBER_OUT - (bo - seat + t)
         line("  hook + fabric fit in the undercut", f"spare {spare:.2f} mm", spare >= 0.25)
     print(f"  no fabric at all: hook still {bo - LIP_R:.2f} mm behind the lip")
+    print("  cap on body:")
+    line("  cap watertight", cap.status().name, cap.status().name == "NoError")
+    clash = (cap ^ body).volume()
+    line("  cap and body do not overlap", f"{clash:.4f} mm3", clash < 1e-3)
+    roof = TOP_Z - KEY_DEPTH - GROOVE_TOP
+    line("  body under the glue groove", f"{roof:.2f} mm over the ring groove", roof >= 0.45)
+    flat = math.pi * (STEP_R ** 2 - POCKET_R ** 2) - math.pi * ((KEY_OUT + GLUE) ** 2 - (KEY_IN - GLUE) ** 2)
+    key = 2 * math.pi * (KEY_IN + KEY_OUT) * KEY_H + math.pi * (KEY_OUT ** 2 - KEY_IN ** 2)
+    skirt = 2 * math.pi * 17.0 * (TOP_Z - STEP_Z)
+    area = flat + key + skirt
+    line("  glue area", f"{area:.0f} mm2 (was 426), at 2 MPa ~{area * 2 / 9.81:.0f} kgf", area > 426)
     return ok
 
 
@@ -203,13 +237,16 @@ def unpack(p):
 
 
 def main():
-    body, ring = body_part(), ring_part()
-    if not check(body, ring):
-        raise SystemExit("parts do not fit, nothing written")
-
     html = PAGE.read_text(encoding="utf-8")
     block = re.compile(r'(<script type="application/json" id="mesh">)(.*?)(</script>)', re.S)
     data = json.loads(block.search(html).group(2))
+    v, i = unpack(data["cap"])
+    body, ring = body_part(), ring_part()
+    cap = cap_part(Manifold(Mesh(vert_properties=np.array(v, np.float32), tri_verts=np.array(i, np.uint32))))
+    if not check(body, ring, cap):
+        raise SystemExit("parts do not fit, nothing written")
+
+    data["cap"] = packed(*as_arrays(cap))
     data["body"] = packed(*as_arrays(body))
     data["ring"] = packed(*as_arrays(ring))
     data["fit"] = {"fabric": FABRIC, "preload": PRELOAD, "hook": HOOK, "gap_deg": GAP_DEG}
