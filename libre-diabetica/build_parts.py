@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Build the printable parts of the Libre diabetica replica (FDM).
 
-    cap   white, smooth face, screws onto the base (3-start thread, a third of a
-          turn), so fronts can be swapped; a silicone O-ring under it keeps it
-          from working loose in the wash and keeps water out of the thread
+    cap   white, 'diabetica' pressed into the face, screws onto the base (3-start
+          thread, a third of a turn), so fronts can be swapped
     base  clear, ribbed like a Libre, sits on the outside of the sleeve
     ring  split clip ring inside the shirt, snaps into the base through the fabric
     lock  disc in the middle of the ring with four pins: they go through the fabric
@@ -95,10 +94,6 @@ SOCKET_TOP = 4.0      # 0.2 mm over the boss
 # letters crisp. Bold sans, strokes ~0.5 mm for a 0.4 mm nozzle; can be filled with paint
 TEXT, TEXT_WIDTH, TEXT_DEPTH = "diabetica", 22.0, 0.4
 
-# silicone O-ring 30 x 1 in a groove under the cap: it stays squeezed when the cap is
-# screwed down, so the thread keeps its grip through wash after wash, and seals it
-ORING_ID, ORING_CS = 30.0, 1.0
-ORING_OUT, ORING_DEPTH = 16.3, 0.8
 
 
 def revolve(profile, segments=SEG, degrees=360.0):
@@ -183,9 +178,7 @@ def cap_part():
     socket = thread(THREAD_CLR, SOCKET_TOP - z0).translate([0, 0, z0])
     mouth = THREAD_CREST + THREAD_CLR           # 45° mouth chamfer, leaves the thread itself alone
     lead_in = cone(BASE_TOP - 0.1, mouth + 0.4, BASE_TOP + 0.3, mouth)
-    oring = revolve([(ORING_ID / 2, BASE_TOP - 0.1), (ORING_OUT, BASE_TOP - 0.1),
-                     (ORING_OUT, BASE_TOP + ORING_DEPTH), (ORING_ID / 2, BASE_TOP + ORING_DEPTH)])
-    return outer - socket - lead_in - oring - text_part()
+    return outer - socket - lead_in - text_part()
 
 
 def text_part():
@@ -203,13 +196,6 @@ def text_part():
     letters = CrossSection(shapes, FillRule.EvenOdd)
     return Manifold.extrude(letters, TEXT_DEPTH + 0.1).translate([0, 0, CAP_TOP - TEXT_DEPTH])
 
-
-def oring_part():
-    """The O-ring as it sits squeezed in its groove (for the viewer)."""
-    a, b = (ORING_OUT - ORING_ID / 2) / 2 - 0.02, ORING_DEPTH / 2 - 0.01
-    rc, zc = ORING_ID / 2 + a + 0.01, BASE_TOP + ORING_DEPTH / 2
-    pts = [(rc + a * math.cos(t), zc + b * math.sin(t)) for t in np.linspace(0, 2 * math.pi, 24, endpoint=False)]
-    return revolve(pts, 128)
 
 
 def ring_geometry():
@@ -406,13 +392,6 @@ def check(body, ring, cap, lock):
     lo, hi = text.bounding_box()[:2], text.bounding_box()[3:5]
     line(f"  '{TEXT}' on the face", f"{hi[0] - lo[0]:.1f} x {hi[1] - lo[1]:.1f} mm, {TEXT_DEPTH} deep, "
          f"{CAP_TOP - TEXT_DEPTH - SOCKET_TOP:.1f} mm left over the thread", CAP_TOP - TEXT_DEPTH - SOCKET_TOP >= 0.5)
-    squeeze = (ORING_CS - ORING_DEPTH) / ORING_CS
-    fill = math.pi * (ORING_CS / 2) ** 2 / ((ORING_OUT - ORING_ID / 2) * ORING_DEPTH)
-    line("  O-ring squeezed when tight", f"{squeeze * 100:.0f} %, groove {fill * 100:.0f} % full",
-         0.15 <= squeeze <= 0.3 and fill <= 0.85)
-    line("  O-ring sits clear of the thread and the edge",
-         f"groove {ORING_ID / 2:.1f}-{ORING_OUT:.1f}, thread mouth {THREAD_CREST + THREAD_CLR + 0.4:.1f}",
-         ORING_ID / 2 >= THREAD_CREST + THREAD_CLR + 0.5 and ORING_OUT <= R_OUT - 0.8)
     return ok
 
 
@@ -450,7 +429,7 @@ def main():
 
     body_c, lock_c = body_click_part(), lock_click_part()
     shown = {"cap": cap, "body": body, "ring": ring, "lock": lock_melted(), "lock_print": lock,
-             "tag": tag_part(), "oring": oring_part(),
+             "tag": tag_part(),
              "body_click": body_c, "lock_click": lock_c, "tag_click": tag_click_part()}
     data = {k: packed(*as_arrays(p)) for k, p in shown.items()}
     data["fit"] = {"fabric": FABRIC, "preload": PRELOAD, "hook": HOOK, "gap_deg": GAP_DEG,
