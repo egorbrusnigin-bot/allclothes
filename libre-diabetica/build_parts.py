@@ -16,7 +16,7 @@ Nothing can be taken off from inside the shirt.
 Checks the fit, writes print-ready STL files (already turned the way they go on
 the bed) to ./stl and refreshes the meshes embedded in Libre_Diabetica_3D.html.
 
-    pip install manifold3d numpy
+    pip install manifold3d numpy matplotlib
     python3 build_parts.py
 
 All sizes are millimetres, Z up, z = 0 is the underside of the base, which is
@@ -30,7 +30,7 @@ import struct
 from pathlib import Path
 
 import numpy as np
-from manifold3d import CrossSection, Manifold, OpType
+from manifold3d import CrossSection, FillRule, Manifold, OpType
 
 HERE = Path(__file__).resolve().parent
 PAGE = HERE / "Libre_Diabetica_3D.html"
@@ -90,6 +90,10 @@ THREAD_CLR = 0.2      # radial play for FDM, the teeth still overlap by 0.4 mm
 BOSS_TOP = 3.8
 CAP_TOP, CAP_EDGE = 5.0, 0.8
 SOCKET_TOP = 4.0      # 0.2 mm over the boss
+
+# brand name pressed into the cap face; the face prints on the bed, so FDM draws the
+# letters crisp. Bold sans, strokes ~0.5 mm for a 0.4 mm nozzle; can be filled with paint
+TEXT, TEXT_WIDTH, TEXT_DEPTH = "diabetica", 22.0, 0.4
 
 # silicone O-ring 30 x 1 in a groove under the cap: it stays squeezed when the cap is
 # screwed down, so the thread keeps its grip through wash after wash, and seals it
@@ -181,7 +185,23 @@ def cap_part():
     lead_in = cone(BASE_TOP - 0.1, mouth + 0.4, BASE_TOP + 0.3, mouth)
     oring = revolve([(ORING_ID / 2, BASE_TOP - 0.1), (ORING_OUT, BASE_TOP - 0.1),
                      (ORING_OUT, BASE_TOP + ORING_DEPTH), (ORING_ID / 2, BASE_TOP + ORING_DEPTH)])
-    return outer - socket - lead_in - oring
+    return outer - socket - lead_in - oring - text_part()
+
+
+def text_part():
+    from matplotlib.font_manager import FontProperties, findfont
+    from matplotlib.textpath import TextPath
+
+    font = FontProperties(fname=findfont(FontProperties(family="DejaVu Sans", weight="bold")))
+    path = TextPath((0, 0), TEXT, size=1.0, prop=font)
+    polys = [np.asarray(p) for p in path.to_polygons(closed_only=True)]
+    pts = np.vstack(polys)
+    lo, hi = pts.min(0), pts.max(0)
+    k = TEXT_WIDTH / (hi[0] - lo[0])
+    centre = (lo + hi) / 2
+    shapes = [[tuple((q - centre) * k) for q in poly[:-1]] for poly in polys]
+    letters = CrossSection(shapes, FillRule.EvenOdd)
+    return Manifold.extrude(letters, TEXT_DEPTH + 0.1).translate([0, 0, CAP_TOP - TEXT_DEPTH])
 
 
 def oring_part():
@@ -382,6 +402,10 @@ def check(body, ring, cap, lock):
     lead_angle = math.degrees(math.atan(THREAD_LEAD / (2 * math.pi * THREAD_ROOT)))
     line("  thread holds by friction", f"lead angle {lead_angle:.1f}°", lead_angle < 5)
     line("  cap face over the thread", f"{CAP_TOP - SOCKET_TOP:.2f} mm", CAP_TOP - SOCKET_TOP >= 0.8)
+    text = text_part()
+    lo, hi = text.bounding_box()[:2], text.bounding_box()[3:5]
+    line(f"  '{TEXT}' on the face", f"{hi[0] - lo[0]:.1f} x {hi[1] - lo[1]:.1f} mm, {TEXT_DEPTH} deep, "
+         f"{CAP_TOP - TEXT_DEPTH - SOCKET_TOP:.1f} mm left over the thread", CAP_TOP - TEXT_DEPTH - SOCKET_TOP >= 0.5)
     squeeze = (ORING_CS - ORING_DEPTH) / ORING_CS
     fill = math.pi * (ORING_CS / 2) ** 2 / ((ORING_OUT - ORING_ID / 2) * ORING_DEPTH)
     line("  O-ring squeezed when tight", f"{squeeze * 100:.0f} %, groove {fill * 100:.0f} % full",
