@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Build the printable parts of the Libre diabetica replica (FDM, PETG).
+"""Build the printable parts of the Libre diabetica replica (FDM).
 
     cap   white, smooth face, screws onto the base (3-start thread, a third of a
-          turn), so fronts can be swapped
+          turn), so fronts can be swapped; a silicone O-ring under it keeps it
+          from working loose in the wash and keeps water out of the thread
     base  clear, ribbed like a Libre, sits on the outside of the sleeve
     ring  split clip ring inside the shirt, snaps into the base through the fabric
-    lock  disc in the middle of the ring, so the ring can no longer be squeezed
-          out; it holds the NFC sticker, under the fabric
+    lock  disc in the middle of the ring with four pins: they go through the fabric
+          and the base and are melted over on top of the base with a soldering iron,
+          under the cap. The NFC sticker is sealed inside the lock (the print is
+          paused to drop it in), so washing water never reaches it.
 
-The base goes on for good in one of two ways:
-    click   the lock clicks into the ring (no holes, no glue; add glue to make it final)
-    rivet   the lock has four pins that go through the fabric and the base and are
-            melted over on top of the base with a soldering iron
+Nothing can be taken off from inside the shirt.
 
 Checks the fit, writes print-ready STL files (already turned the way they go on
 the bed) to ./stl and refreshes the meshes embedded in Libre_Diabetica_3D.html.
@@ -59,13 +59,28 @@ HOOK = 0.8            # how far the hook reaches behind the lip, plastic on plas
 FLANGE_IN, FLANGE_OUT = 11.0, 16.5
 FLANGE_T = 1.2
 GAP_DEG = 34.0        # cut in the ring, closes when it is squeezed through the lip
-LOCK_GROOVE = (-1.3, -0.9, 0.5)   # z from, z to, depth of the groove in the flange's inner wall
+LOCK_GROOVE = (-1.3, -0.9, 0.5)   # groove in the flange's inner wall for the click lock's hooks
+
+# click lock (second variant, no holes in the fabric): three tabs click into the ring;
+# glue (E6000) through the fabric makes it final. Ø20 NFC in a pocket, sealed by the glue
+TAB_BAND, TAB_SLOT, TAB_DEG = 1.2, 0.8, 60.0
+LOCK_HOOK_R, LOCK_HOOK_Z = 11.25, (-1.2, -1.0)
+CLICK_NFC_TAG, CLICK_NFC_POCKET = 10.0, 10.2
 
 # lock disc: fills the middle of the ring so the ring cannot shrink any more
 LOCK_R = 10.55        # a hair under the ring's hole with the thickest fabric
-TAB_BAND, TAB_SLOT, TAB_DEG = 1.2, 0.8, 60.0
-LOCK_HOOK_R = 11.25   # hook on each tab, clicks into the flange groove
-LOCK_HOOK_Z = (-1.2, -1.0)
+PIN_R, PIN_D, PIN_N = 9.3, 1.6, 4
+PIN_HOLE = 2.0
+PIN_OVER = 1.0        # sticks out over the boss, melted flat into the countersink
+SINK_D, SINK_DEPTH = 3.4, 0.5
+FUNNEL_D = 3.0        # entry funnel under each hole, so the pins find their way in
+
+# NFC sticker (Ø15, NTAG213) sealed inside the lock: the lock prints skin side down,
+# the print pauses at NFC_PAUSE, the sticker goes in, the rest prints over it
+NFC_TAG, NFC_T = 7.5, 0.35
+NFC_POCKET = 7.7
+NFC_FLOOR, NFC_ROOM = 0.4, 0.4
+NFC_PAUSE = NFC_FLOOR + NFC_ROOM
 
 # cap on a thread: 3 starts like a bottle cap, a third of a turn from touch to tight,
 # fine enough that the teeth catch all the way round; flanks ~35° off vertical print clean
@@ -76,17 +91,10 @@ BOSS_TOP = 3.8
 CAP_TOP, CAP_EDGE = 5.0, 0.8
 SOCKET_TOP = 4.0      # 0.2 mm over the boss
 
-# NFC sticker in the top of the lock disc, under the fabric: Ø20 in the click lock,
-# Ø15 in the rivet lock (the pins run around it)
-NFC_POCKET = {"click": 10.2, "rivet": 7.7}
-NFC_TAG = {"click": 10.0, "rivet": 7.5}
-NFC_DEPTH, NFC_T = 0.4, 0.35
-
-# rivet lock: pins through fabric and base, melted into countersinks on top of the boss
-PIN_R, PIN_D, PIN_N = 9.3, 1.4, 4
-PIN_HOLE = 1.8
-PIN_OVER = 1.0        # sticks out over the boss, melted flat into the countersink
-SINK_D, SINK_DEPTH = 3.0, 0.5
+# silicone O-ring 30 x 1 in a groove under the cap: it stays squeezed when the cap is
+# screwed down, so the thread keeps its grip through wash after wash, and seals it
+ORING_ID, ORING_CS = 30.0, 1.0
+ORING_OUT, ORING_DEPTH = 16.3, 0.8
 
 
 def revolve(profile, segments=SEG, degrees=360.0):
@@ -97,31 +105,12 @@ def cone(z0, r0, z1, r1):
     return Manifold.cylinder(z1 - z0, r0, r1, SEG).translate([0, 0, z0])
 
 
-def body_part():
-    lip_foot = LIP_R + 0.25
-    profile = [
-        (0, 0), (GROOVE_IN - 0.8, 0), (GROOVE_IN, 1.0), (GROOVE_IN, GROOVE_TOP),
-        (CHAMBER_OUT, GROOVE_TOP), (CHAMBER_OUT, LIP_Z_OUT), (LIP_R, LIP_Z_IN),
-        (LIP_R, 0.25), (lip_foot, 0), (17.2, 0), (R_OUT, 0.3), (R_OUT, BASE_TOP - 0.2),
-        (R_OUT - 0.2, BASE_TOP), (0, BASE_TOP),
-    ]
-    solid = revolve(profile, RIBS * 4)
-
-    def ribs(v):
-        v = np.array(v, dtype=np.float64)
-        r = np.hypot(v[:, 0], v[:, 1])
-        wall = (r > R_OUT - 0.02) & (v[:, 2] > 0.29)
-        a = np.arctan2(v[wall, 1], v[wall, 0])
-        rr = RIB_MID + RIB_AMP * np.cos(RIBS * a)
-        v[wall, 0] = rr * np.cos(a)
-        v[wall, 1] = rr * np.sin(a)
-        return v
-
-    z0 = BASE_TOP - 0.05
-    boss = thread(0.0, BOSS_TOP - z0).translate([0, 0, z0])
-    top = THREAD_CREST - 0.2                    # 45° lead-in over the top 0.2 mm only
-    boss = boss ^ cone(BASE_TOP - 0.1, top + BOSS_TOP - BASE_TOP + 0.1, BOSS_TOP, top)
-    return solid.warp_batch(ribs) + boss
+def at_pins(part):
+    out = []
+    for i in range(PIN_N):
+        a = math.radians(45 + 90 * i)
+        out.append(part.translate([PIN_R * math.cos(a), PIN_R * math.sin(a), 0]))
+    return Manifold.batch_boolean(out, OpType.Add)
 
 
 def thread(clearance, height):
@@ -148,6 +137,41 @@ def thread(clearance, height):
                             twist_degrees=360.0 * height / THREAD_LEAD)
 
 
+def body_click_part():
+    lip_foot = LIP_R + 0.25
+    profile = [
+        (0, 0), (GROOVE_IN - 0.8, 0), (GROOVE_IN, 1.0), (GROOVE_IN, GROOVE_TOP),
+        (CHAMBER_OUT, GROOVE_TOP), (CHAMBER_OUT, LIP_Z_OUT), (LIP_R, LIP_Z_IN),
+        (LIP_R, 0.25), (lip_foot, 0), (17.2, 0), (R_OUT, 0.3), (R_OUT, BASE_TOP - 0.2),
+        (R_OUT - 0.2, BASE_TOP), (0, BASE_TOP),
+    ]
+    solid = revolve(profile, RIBS * 4)
+
+    def ribs(v):
+        v = np.array(v, dtype=np.float64)
+        r = np.hypot(v[:, 0], v[:, 1])
+        wall = (r > R_OUT - 0.02) & (v[:, 2] > 0.29)
+        a = np.arctan2(v[wall, 1], v[wall, 0])
+        rr = RIB_MID + RIB_AMP * np.cos(RIBS * a)
+        v[wall, 0] = rr * np.cos(a)
+        v[wall, 1] = rr * np.sin(a)
+        return v
+
+    z0 = BASE_TOP - 0.05
+    boss = thread(0.0, BOSS_TOP - z0).translate([0, 0, z0])
+    top = THREAD_CREST - 0.2                    # 45° lead-in over the top 0.2 mm only
+    boss = boss ^ cone(BASE_TOP - 0.1, top + BOSS_TOP - BASE_TOP + 0.1, BOSS_TOP, top)
+    return solid.warp_batch(ribs) + boss
+
+
+def body_part():
+    body = body_click_part()
+    holes = at_pins(Manifold.cylinder(BOSS_TOP + 2, PIN_HOLE / 2, PIN_HOLE / 2, 48).translate([0, 0, -1]))
+    sinks = at_pins(cone(BOSS_TOP - SINK_DEPTH, PIN_HOLE / 2, BOSS_TOP + 0.01, SINK_D / 2))
+    funnels = at_pins(cone(-0.01, FUNNEL_D / 2, (FUNNEL_D - PIN_HOLE) / 2, PIN_HOLE / 2))
+    return body - holes - sinks - funnels
+
+
 def cap_part():
     outer = revolve([(0, BASE_TOP), (R_OUT - 0.2, BASE_TOP), (R_OUT, BASE_TOP + 0.2),
                      (R_OUT, CAP_TOP - CAP_EDGE), (R_OUT - CAP_EDGE, CAP_TOP), (0, CAP_TOP)])
@@ -155,12 +179,17 @@ def cap_part():
     socket = thread(THREAD_CLR, SOCKET_TOP - z0).translate([0, 0, z0])
     mouth = THREAD_CREST + THREAD_CLR           # 45° mouth chamfer, leaves the thread itself alone
     lead_in = cone(BASE_TOP - 0.1, mouth + 0.4, BASE_TOP + 0.3, mouth)
-    return outer - socket - lead_in
+    oring = revolve([(ORING_ID / 2, BASE_TOP - 0.1), (ORING_OUT, BASE_TOP - 0.1),
+                     (ORING_OUT, BASE_TOP + ORING_DEPTH), (ORING_ID / 2, BASE_TOP + ORING_DEPTH)])
+    return outer - socket - lead_in - oring
 
 
-def tag_part(kind="click"):
-    z = -FABRIC - NFC_DEPTH
-    return Manifold.cylinder(NFC_T, NFC_TAG[kind], NFC_TAG[kind], 128).translate([0, 0, z])
+def oring_part():
+    """The O-ring as it sits squeezed in its groove (for the viewer)."""
+    a, b = (ORING_OUT - ORING_ID / 2) / 2 - 0.02, ORING_DEPTH / 2 - 0.01
+    rc, zc = ORING_ID / 2 + a + 0.01, BASE_TOP + ORING_DEPTH / 2
+    pts = [(rc + a * math.cos(t), zc + b * math.sin(t)) for t in np.linspace(0, 2 * math.pi, 24, endpoint=False)]
+    return revolve(pts, 128)
 
 
 def ring_geometry():
@@ -187,63 +216,51 @@ def ring_part():
         (fi + 0.3, top), (fi, top - 0.3),
         (fi, flange_top + 0.2), (fi - 0.2, flange_top),
         (FLANGE_IN + 0.2, flange_top), (FLANGE_IN, flange_top - 0.2),
-        (FLANGE_IN, gz1), (FLANGE_IN + gd, gz1), (FLANGE_IN + gd, gz0), (FLANGE_IN, gz0),   # groove for the lock
+        (FLANGE_IN, gz1), (FLANGE_IN + gd, gz1), (FLANGE_IN + gd, gz0), (FLANGE_IN, gz0),   # for the click lock
         (FLANGE_IN, bot + 0.3),
     ]
     ring = revolve(profile, degrees=360.0 - GAP_DEG)
     return ring.rotate([0, 0, 180.0 + GAP_DEG / 2])   # gap faces +X
 
 
-def sector(r0, r1, z0, z1, a0, a1):
-    return revolve([(r0, z0), (r1, z0), (r1, z1), (r0, z1)], degrees=a1 - a0).rotate([0, 0, a0])
-
-
-def lock_disc(kind):
-    bot, top = -FABRIC - FLANGE_T, -FABRIC
-    pocket = NFC_POCKET[kind]
-    return revolve([(0, bot), (LOCK_R - 0.3, bot), (LOCK_R, bot + 0.3), (LOCK_R, top),
-                    (pocket, top), (pocket, top - NFC_DEPTH), (0, top - NFC_DEPTH)])
-
-
 def lock_part():
+    """Lock disc with the rivet pins and a sealed pocket for the NFC sticker."""
     bot, top = -FABRIC - FLANGE_T, -FABRIC
-    disc = lock_disc("click")
+    disc = revolve([(0, bot), (LOCK_R - 0.3, bot), (LOCK_R, bot + 0.3), (LOCK_R, top), (0, top)])
+    pocket = Manifold.cylinder(NFC_ROOM, NFC_POCKET, NFC_POCKET, 128).translate([0, 0, bot + NFC_FLOOR])
+    pin = (Manifold.cylinder(BOSS_TOP + PIN_OVER - top - 0.5, PIN_D / 2, PIN_D / 2, 48)
+           + Manifold.cylinder(0.5, PIN_D / 2, PIN_D * 0.18, 48).translate([0, 0, BOSS_TOP + PIN_OVER - top - 0.5]))
+    return disc - pocket + at_pins(pin.translate([0, 0, top - 0.1]))
+
+
+def lock_click_part():
+    bot, top = -FABRIC - FLANGE_T, -FABRIC
+    disc = revolve([(0, bot), (LOCK_R - 0.3, bot), (LOCK_R, bot + 0.3), (LOCK_R, top),
+                    (CLICK_NFC_POCKET, top), (CLICK_NFC_POCKET, top - NFC_ROOM), (0, top - NFC_ROOM)])
     band_in = LOCK_R - TAB_BAND
     hz0, hz1 = LOCK_HOOK_Z
     for i in range(3):
         a = 120.0 * i + 30.0
         disc -= sector(band_in - TAB_SLOT, band_in, bot - 1, top + 1, a, a + TAB_DEG)      # frees the tab
         disc -= sector(band_in - TAB_SLOT, LOCK_R + 1, bot - 1, top + 1, a + TAB_DEG, a + TAB_DEG + 3)
-        hook = revolve([(LOCK_R - 0.1, bot), (LOCK_R, bot), (LOCK_HOOK_R, hz0), (LOCK_HOOK_R, hz1),
-                        (LOCK_R - 0.1, hz1)], degrees=14.0).rotate([0, 0, a + TAB_DEG - 16])
-        disc += hook
+        disc += revolve([(LOCK_R - 0.1, bot), (LOCK_R, bot), (LOCK_HOOK_R, hz0), (LOCK_HOOK_R, hz1),
+                         (LOCK_R - 0.1, hz1)], degrees=14.0).rotate([0, 0, a + TAB_DEG - 16])
     return disc
 
 
-def pins(r, z0, z1, tip=0.0):
-    out = []
-    for i in range(PIN_N):
-        a = math.radians(45 + 90 * i)
-        pin = Manifold.cylinder(z1 - z0 - tip, r, r, 48).translate([0, 0, z0])
-        if tip:
-            pin += Manifold.cylinder(tip, r, r * 0.35, 48).translate([0, 0, z1 - tip])
-        out.append(pin.translate([PIN_R * math.cos(a), PIN_R * math.sin(a), 0]))
-    return Manifold.batch_boolean(out, OpType.Add)
+def tag_click_part():
+    return Manifold.cylinder(NFC_T, CLICK_NFC_TAG, CLICK_NFC_TAG, 128).translate([0, 0, -FABRIC - NFC_ROOM])
 
 
-def lock_rivet_part():
-    """Plain lock disc with pins: pushed through the fabric and the base, then melted over."""
-    return lock_disc("rivet") + pins(PIN_D / 2, -FABRIC - 0.1, BOSS_TOP + PIN_OVER, tip=0.5)
+def lock_melted():
+    """How the lock looks once the pins are melted into the countersinks (for the viewer)."""
+    heads = at_pins(cone(BOSS_TOP - SINK_DEPTH, PIN_HOLE / 2, BOSS_TOP, SINK_D / 2))
+    return lock_part().trim_by_plane([0, 0, -1], -BOSS_TOP) + heads
 
 
-def body_rivet_part(body):
-    holes = pins(PIN_HOLE / 2, -1, BOSS_TOP + 1)
-    sinks = []
-    for i in range(PIN_N):
-        a = math.radians(45 + 90 * i)
-        sinks.append(cone(BOSS_TOP - SINK_DEPTH, PIN_HOLE / 2, BOSS_TOP + 0.01, SINK_D / 2)
-                     .translate([PIN_R * math.cos(a), PIN_R * math.sin(a), 0]))
-    return body - holes - Manifold.batch_boolean(sinks, OpType.Add)
+def tag_part():
+    z = -FABRIC - FLANGE_T + NFC_FLOOR + 0.02
+    return Manifold.cylinder(NFC_T, NFC_TAG, NFC_TAG, 128).translate([0, 0, z])
 
 
 def fabric_path():
@@ -274,11 +291,15 @@ def radial_shift(part, dr):
     return part.warp_batch(warp)
 
 
+def sector(r0, r1, z0, z1, a0, a1):
+    return revolve([(r0, z0), (r1, z0), (r1, z1), (r0, z1)], degrees=a1 - a0).rotate([0, 0, a0])
+
+
 def groove_wall(z):
     return GROOVE_IN - 0.8 * max(0.0, 1.0 - z)
 
 
-def check(body, ring, cap, lock, body_rivet, lock_rivet):
+def check(body, ring, cap, lock):
     fo, fi, bo, hook_z, top = ring_geometry()
     ok = True
 
@@ -288,39 +309,64 @@ def check(body, ring, cap, lock, body_rivet, lock_rivet):
         print(f"  {'ok ' if good else 'BAD'} {label}: {value}")
 
     print("fit check")
-    for name, part in (("base", body), ("ring", ring), ("cap", cap), ("lock", lock),
-                       ("rivet base", body_rivet), ("rivet lock", lock_rivet)):
+    for name, part in (("base", body), ("ring", ring), ("cap", cap), ("lock", lock)):
         line(f"{name} watertight", part.status().name, part.status().name == "NoError" and part.volume() > 0)
     seated = radial_shift(ring, -PRELOAD)       # ring squeezed by the fabric when worn
     gap = body.min_gap(seated, 2.0)
     line(f"room for {FABRIC} mm fabric everywhere", f"min gap {gap:.2f} mm", gap >= FABRIC - 0.03)
+
+    print("  ring through the fabric:")
     c = (FLANGE_OUT - FLANGE_IN) / 2
     mid = (FLANGE_IN + FLANGE_OUT) / 2
     gap_mm = math.radians(GAP_DEG) * (fo - COLLAR / 2)
     for t in FABRIC_RANGE:
-        print(f"  fabric {t} mm:")
         squeeze = bo + t - LIP_R                 # to get hook + fabric past the lip
         room = fi - squeeze - t - groove_wall(top - LIP_Z_IN - 0.3)
-        line("  ring squeezes through the lip", f"{squeeze:.2f} mm, spare inside {room:.2f} mm", room >= 0.1)
-        line("  cut in the ring", f"closes {2 * math.pi * squeeze:.1f} of {gap_mm:.1f} mm", gap_mm > 2 * math.pi * squeeze + 0.8)
         strain = c * squeeze / mid ** 2
-        line("  ring bending while snapping", f"{strain * 100:.1f} %", strain < 0.02)
         seat = max(0.0, fo + t - LIP_R)          # how much the fabric keeps the ring squeezed
         hold = bo - seat + t - LIP_R
-        line("  hook depth behind the lip", f"{hold:.2f} mm", hold >= 0.75)
         spare = CHAMBER_OUT - (bo - seat + t)
-        line("  hook + fabric fit in the undercut", f"spare {spare:.2f} mm", spare >= 0.25)
-        hole = FLANGE_IN - seat
-        give = hole - LOCK_R
-        line("  lock disc leaves the ring room to shrink", f"{give:.2f} mm, hook keeps {hold - give:.2f} mm", 0.1 <= give and hold - give >= 0.3)
-        grip = LOCK_HOOK_R - hole
-        bend = grip / (TAB_SLOT - 0.1)
-        line("  lock clicks into the ring", f"hook {grip:.2f} mm, tab uses {bend * 100:.0f} % of its slot", grip >= 0.25 and bend <= 1.0)
+        give = FLANGE_IN - seat - LOCK_R         # how far the lock still lets the ring shrink
+        line(f"  fabric {t}: squeeze {squeeze:.2f}, room inside {room:.2f}, cut closes "
+             f"{2 * math.pi * squeeze:.1f}/{gap_mm:.1f} mm, bend {strain * 100:.1f} %",
+             "ok" if room >= 0.1 and gap_mm > 2 * math.pi * squeeze + 0.8 and strain < 0.02 else "no",
+             room >= 0.1 and gap_mm > 2 * math.pi * squeeze + 0.8 and strain < 0.02)
+        line(f"  fabric {t}: hook {hold:.2f} mm behind the lip, {hold - give:.2f} mm even if squeezed "
+             f"against the lock, {spare:.2f} mm spare in the undercut", "ok",
+             hold >= 0.75 and 0.1 <= give and hold - give >= 0.3 and spare >= 0.25)
+
+    print("  rivets:")
+    clash = (lock ^ body).volume()
+    line("  pins run free in their holes", f"{clash:.4f} mm3", clash < 1e-3)
+    clash = (lock ^ seated).volume()
+    line("  lock sits inside the ring", f"{clash:.4f} mm3", clash < 1e-3)
+    melt = math.pi * (PIN_D / 2) ** 2 * PIN_OVER
+    sink = math.pi * SINK_DEPTH / 3 * ((SINK_D / 2) ** 2 + SINK_D / 2 * PIN_HOLE / 2 + (PIN_HOLE / 2) ** 2) \
+        - math.pi * (PIN_D / 2) ** 2 * SINK_DEPTH
+    line("  melted head fills the countersink", f"{melt:.2f} of {sink:.2f} mm3", 0.6 * sink <= melt <= 1.6 * sink)
+    line("  pins clear the NFC pocket", f"{PIN_R - PIN_D / 2 - NFC_POCKET:.2f} mm", PIN_R - PIN_D / 2 - NFC_POCKET >= 0.5)
+
+    print("  click lock (variant 2):")
+    lock_c = lock_click_part()
+    line("  watertight", lock_c.status().name, lock_c.status().name == "NoError")
     tab_len = math.radians(TAB_DEG) * (LOCK_R - TAB_BAND / 2)
-    worst = LOCK_HOOK_R - (FLANGE_IN - max(0.0, fo + FABRIC_RANGE[-1] - LIP_R))
-    strain = 1.5 * TAB_BAND * max(worst, LOCK_HOOK_R - FLANGE_IN) / tab_len ** 2
-    line("lock tab bending", f"{strain * 100:.1f} %", strain < 0.02)
-    print(f"  no fabric at all: hook still {bo - LIP_R:.2f} mm behind the lip")
+    for t in FABRIC_RANGE:
+        hole = FLANGE_IN - max(0.0, fo + t - LIP_R)
+        grip, bend = LOCK_HOOK_R - hole, (LOCK_HOOK_R - hole) / (TAB_SLOT - 0.1)
+        strain = 1.5 * TAB_BAND * grip / tab_len ** 2
+        line(f"  fabric {t}: tab hook {grip:.2f} mm in the ring, uses {bend * 100:.0f} % of its slot, bend {strain * 100:.1f} %",
+             "ok", grip >= 0.25 and bend <= 1.0 and strain < 0.02)
+    line("  NFC Ø20 pocket rim", f"{LOCK_R - CLICK_NFC_POCKET:.2f} mm", LOCK_R - CLICK_NFC_POCKET >= 0.3)
+
+    print("  NFC sealed in the lock:")
+    cover = FLANGE_T - NFC_FLOOR - NFC_ROOM
+    line("  plastic under / over the sticker", f"{NFC_FLOOR:.1f} / {cover:.1f} mm", NFC_FLOOR >= 0.399 and cover >= 0.399)
+    line("  room for the sticker", f"{NFC_ROOM - NFC_T:.2f} mm spare in height, {NFC_POCKET - NFC_TAG:.2f} around",
+         NFC_ROOM - NFC_T >= 0.03 and NFC_POCKET - NFC_TAG >= 0.15)
+    closed = lock.genus() == -1                  # outer skin + the closed pocket inside
+    line("  pocket fully closed (a void inside the lock)", f"genus {lock.genus()}", closed)
+    print(f"    pause the lock print at {NFC_PAUSE:.1f} mm, drop the sticker in, resume")
+    print(f"    sticker to cap face: {CAP_TOP + FABRIC + FLANGE_T - NFC_FLOOR - NFC_T:.1f} mm")
 
     print("  cap on the base:")
     clash = (cap ^ body).volume()
@@ -334,24 +380,15 @@ def check(body, ring, cap, lock, body_rivet, lock_rivet):
     turn = 360.0 * (BOSS_TOP - BASE_TOP) / THREAD_LEAD
     line("  turn from touch to tight", f"{turn:.0f}°", turn <= 220)
     lead_angle = math.degrees(math.atan(THREAD_LEAD / (2 * math.pi * THREAD_ROOT)))
-    line("  thread holds by friction (does not unscrew itself)", f"lead angle {lead_angle:.1f}°", lead_angle < 5)
+    line("  thread holds by friction", f"lead angle {lead_angle:.1f}°", lead_angle < 5)
     line("  cap face over the thread", f"{CAP_TOP - SOCKET_TOP:.2f} mm", CAP_TOP - SOCKET_TOP >= 0.8)
-
-    print("  NFC under the fabric:")
-    for kind in ("click", "rivet"):
-        wall = LOCK_R - NFC_POCKET[kind]
-        line(f"  Ø{2 * NFC_TAG[kind]:.0f} sticker in the {kind} lock", f"rim {wall:.2f} mm, {CAP_TOP + FABRIC + NFC_DEPTH:.1f} mm below the cap face",
-             wall >= 0.3 and NFC_T <= NFC_DEPTH)
-    print("  rivet version:")
-    clash = (lock_rivet ^ body_rivet).volume()
-    line("  pins run free in their holes", f"{clash:.4f} mm3", clash < 1e-3)
-    clash = (lock_rivet ^ radial_shift(ring, -PRELOAD)).volume()
-    line("  rivet lock sits inside the ring", f"{clash:.4f} mm3", clash < 1e-3)
-    inner = PIN_R - PIN_D / 2 - NFC_POCKET["rivet"]
-    line("  pins clear the sticker", f"{inner:.2f} mm", inner >= 0.5)
-    melt = math.pi * (PIN_D / 2) ** 2 * PIN_OVER
-    sink = math.pi * SINK_DEPTH / 3 * ((SINK_D / 2) ** 2 + SINK_D / 2 * PIN_HOLE / 2 + (PIN_HOLE / 2) ** 2) - math.pi * (PIN_D / 2) ** 2 * SINK_DEPTH
-    line("  melted head fills the countersink", f"{melt:.2f} of {sink:.2f} mm3", 0.6 * sink <= melt <= 1.6 * sink)
+    squeeze = (ORING_CS - ORING_DEPTH) / ORING_CS
+    fill = math.pi * (ORING_CS / 2) ** 2 / ((ORING_OUT - ORING_ID / 2) * ORING_DEPTH)
+    line("  O-ring squeezed when tight", f"{squeeze * 100:.0f} %, groove {fill * 100:.0f} % full",
+         0.15 <= squeeze <= 0.3 and fill <= 0.85)
+    line("  O-ring sits clear of the thread and the edge",
+         f"groove {ORING_ID / 2:.1f}-{ORING_OUT:.1f}, thread mouth {THREAD_CREST + THREAD_CLR + 0.4:.1f}",
+         ORING_ID / 2 >= THREAD_CREST + THREAD_CLR + 0.5 and ORING_OUT <= R_OUT - 0.8)
     return ok
 
 
@@ -384,14 +421,16 @@ def packed(verts, tris):
 
 def main():
     body, ring, cap, lock = body_part(), ring_part(), cap_part(), lock_part()
-    body_rivet, lock_rivet = body_rivet_part(body), lock_rivet_part()
-    if not check(body, ring, cap, lock, body_rivet, lock_rivet):
+    if not check(body, ring, cap, lock):
         raise SystemExit("parts do not fit, nothing written")
 
-    parts = {"cap": cap, "body": body, "ring": ring, "lock": lock, "tag": tag_part()}
-    data = {k: packed(*as_arrays(p)) for k, p in parts.items()}
+    body_c, lock_c = body_click_part(), lock_click_part()
+    shown = {"cap": cap, "body": body, "ring": ring, "lock": lock_melted(), "lock_print": lock,
+             "tag": tag_part(), "oring": oring_part(),
+             "body_click": body_c, "lock_click": lock_c, "tag_click": tag_click_part()}
+    data = {k: packed(*as_arrays(p)) for k, p in shown.items()}
     data["fit"] = {"fabric": FABRIC, "preload": PRELOAD, "hook": HOOK, "gap_deg": GAP_DEG,
-                   "lead": THREAD_LEAD, "turn": 360.0 * (BOSS_TOP - BASE_TOP) / THREAD_LEAD}
+                   "lead": THREAD_LEAD, "turn": 360.0 * (BOSS_TOP - BASE_TOP) / THREAD_LEAD, "nfc_pause": NFC_PAUSE}
     data["fabric"] = fabric_path()
     html = PAGE.read_text(encoding="utf-8")
     block = re.compile(r'(<script type="application/json" id="mesh">)(.*?)(</script>)', re.S)
@@ -399,16 +438,14 @@ def main():
     PAGE.write_text(block.sub(lambda m: m.group(1) + payload + m.group(3), html, count=1), encoding="utf-8")
 
     STL_DIR.mkdir(exist_ok=True)
-    for old in STL_DIR.glob("*.stl"):
+    for old in STL_DIR.rglob("*.stl"):
         old.unlink()
-    parts.update(body_rivet=body_rivet, lock_rivet=lock_rivet)
-    for name, key, flip in (("1_cap", "cap", True), ("2_base", "body", False), ("3_ring", "ring", False),
-                            ("4_lock_click", "lock", False), ("2_base_RIVET", "body_rivet", False),
-                            ("4_lock_RIVET", "lock_rivet", False)):
-        write_stl(STL_DIR / f"libre_{name}.stl", *as_arrays(parts[key]), face_down=flip)
-    print("written:", ", ".join(sorted(p.name for p in STL_DIR.glob("*.stl"))))
-    for k in ("cap", "body", "ring", "lock", "lock_rivet"):
-        print(f"  {k}: {parts[k].volume() / 1000:.2f} cm3, ~{parts[k].volume() / 1000 * 1.27:.1f} g PETG")
+    (STL_DIR / "click").mkdir(exist_ok=True)
+    for name, part, flip in (("1_cap", cap, True), ("2_base", body, False), ("3_ring", ring, False), ("4_lock", lock, False),
+                             ("click/libre_2_base_click", body_c, False), ("click/libre_4_lock_click", lock_c, False)):
+        path = STL_DIR / (f"{name}.stl" if "/" in name else f"libre_{name}.stl")
+        write_stl(path, *as_arrays(part), face_down=flip)
+        print(f"  {path.relative_to(HERE)}: {part.volume() / 1000:.2f} cm3, ~{part.volume() / 1000 * 1.27:.1f} g")
 
 
 if __name__ == "__main__":
