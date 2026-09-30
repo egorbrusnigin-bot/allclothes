@@ -77,24 +77,24 @@ input[type=range] { width: 140px; accent-color: var(--accent); }
       <button id="stl-cap">Крышка .stl</button><button id="stl-body">Основа .stl</button><button id="stl-ring">Кольцо .stl</button><button id="stl-lock">Стопор .stl</button></div>
   </div>
   <div class="specs">
-    <div><b>Крышка (меняется)</b><br>гладкая, на лице вдавлена надпись <span class="mono">diabetica</span> 22 × 3,3 мм, глубина 0,4 — можно затереть краской. Трёхзаходная резьба, треть оборота до упора. Под крышкой силиконовое кольцо 30×1: держит резьбу натянутой в стирке и не пускает воду</div>
+    <div><b>Крышка (меняется)</b><br>на лице вдавлена надпись <span class="mono">diabetica</span> 22 × 3,3 мм, глубина 0,4 — можно затереть краской. Трёхзаходная резьба, треть оборота до упора; тягой не снимается</div>
     <div><b>Основа (снаружи)</b><br>прозрачная, в рубчик, как у Libre, высота 2,6 мм. Сверху резьба под крышку и четыре гнезда под головки заклёпок, снизу паз с губой для кольца</div>
     <div><b>Кольцо и стопор (изнутри, не снимаются)</b><br>кольцо защёлкивается через ткань, зуб <span class="mono">0,8</span> мм. Стопор в центре не даёт кольцу сжаться. Сам стопор держат заклёпки (вариант 1) или защёлка с клеем (вариант 2)</div>
-    <div><b>Печать и стирка</b><br>FDM, PETG, поддержки не нужны, детали уже лежат как надо. Стирать наизнанку, 30–40 °C, отжим до 1000, без сушильной машины, утюгом по датчику не гладить</div>
+    <div><b>Печать и стирка</b><br>FDM, PETG, поддержки не нужны, детали уже лежат как надо. Крышку перед стиркой открутить. Стирать наизнанку, 30–40 °C, отжим до 1000, без сушильной машины, утюгом по датчику не гладить</div>
   </div>
   <ol class="steps" data-variant="rivet">
     <li><b>Метка.</b> Стопор печатается с паузой на <span class="mono">0,8</span> мм: в паузу кладёшь NFC Ø 15, печать закрывает её сверху. Метка внутри пластика, вода до неё не дойдёт.</li>
     <li><b>Кольцо.</b> Основу — снаружи рукава, кольцо — изнутри, бортиком к ткани. Сжать по кругу до щелчка.</li>
     <li><b>Стопор.</b> Изнутри вдавить стопор в центр кольца: четыре штыря проходят ткань и выходят сверху из основы.</li>
     <li><b>Заклепать.</b> Кончики штырей сверху прижать паяльником, чтобы они расплавились в шляпки. Изнутри больше ничего не снять.</li>
-    <li><b>Крышка.</b> Силиконовое кольцо 30×1 — в канавку под крышкой, накрутить по часовой до упора (треть оборота).</li>
+    <li><b>Крышка.</b> Накрутить по часовой до упора, треть оборота. Перед стиркой лучше открутить.</li>
   </ol>
   <ol class="steps" data-variant="click" hidden>
     <li><b>Метка.</b> NFC Ø 20 — в гнездо стопора, сверху капля E6000: клей её запечатает.</li>
     <li><b>Клей.</b> Капнуть E6000 в паз основы по кругу и на фланец кольца.</li>
     <li><b>Кольцо.</b> Основу — снаружи рукава, кольцо — изнутри, бортиком к ткани. Сжать по кругу до щелчка.</li>
     <li><b>Стопор.</b> Вдавить в центр кольца до щелчка лапок. Сутки не трогать: клей пропитает ткань и схватит всё в один кусок, ткань без проколов.</li>
-    <li><b>Крышка.</b> Силиконовое кольцо 30×1 — в канавку под крышкой, накрутить по часовой до упора (треть оборота).</li>
+    <li><b>Крышка.</b> Накрутить по часовой до упора, треть оборота. Перед стиркой лучше открутить.</li>
   </ol>
 </div>
 <script type="importmap">{"imports": {"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -107,7 +107,7 @@ import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
 const D = JSON.parse(document.getElementById("mesh").textContent);
 const dec = (s, T) => { const b = atob(s); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new T(u.buffer); };
 const raw = {};
-for (const k of ["cap", "body", "ring", "lock", "lock_print", "tag", "oring", "body_click", "lock_click", "tag_click"]) raw[k] = { v: dec(D[k].v, Float32Array), i: dec(D[k].i, Uint32Array) };
+for (const k of ["cap", "body", "ring", "lock", "lock_print", "tag", "body_click", "lock_click", "tag_click"]) raw[k] = { v: dec(D[k].v, Float32Array), i: dec(D[k].i, Uint32Array) };
 function geom(k) {
   let g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(raw[k].v, 3));
@@ -365,11 +365,10 @@ const mats = {
   body: new THREE.MeshPhysicalMaterial({ color: 0xe8f0f6, roughness: 0.12, transmission: 0.92, thickness: 2.5, ior: 1.49, transparent: true }),
   ring: new THREE.MeshStandardMaterial({ color: 0x3a3e43, roughness: 0.6 }),
   tag: new THREE.MeshStandardMaterial({ color: 0xb87333, metalness: 0.6, roughness: 0.35 }),
-  oring: new THREE.MeshStandardMaterial({ color: 0x9aa3a8, roughness: 0.8 }),
 };
 const parts = {};
 mats.lock = mats.ring;
-for (const k of ["cap", "body", "ring", "lock", "tag", "oring"]) { parts[k] = new THREE.Mesh(geom(k), mats[k]); sensor.add(parts[k]); }
+for (const k of ["cap", "body", "ring", "lock", "tag"]) { parts[k] = new THREE.Mesh(geom(k), mats[k]); sensor.add(parts[k]); }
 // two ways to make the inside permanent: rivets through the fabric, or a click lock + glue
 const variants = { rivet: { body: "body", lock: "lock", tag: "tag" }, click: { body: "body_click", lock: "lock_click", tag: "tag_click" } };
 const geoms = {};
@@ -424,7 +423,7 @@ const ex = document.getElementById("explode");
 function explode() {
   const e = +ex.value;
   parts.cap.position.z = 14 * e; parts.cap.rotation.z = THREE.MathUtils.degToRad(D.fit.turn) * Math.min(1, e * 2);   // unscrews
-  parts.body.position.z = 4.5 * e; parts.oring.position.z = 9 * e; parts.ring.position.z = -10 * e; parts.tag.position.z = -13 * e; parts.lock.position.z = -17 * e;
+  parts.body.position.z = 4.5 * e; parts.ring.position.z = -10 * e; parts.tag.position.z = -13 * e; parts.lock.position.z = -17 * e;
   shapeCloth(e);
   const fade = Math.min(1, e / 0.35), s = fade * fade * (3 - 2 * fade);   // the shirt pales so the ring inside shows
   for (const m of [shirtMat, clothMat]) {
