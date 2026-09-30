@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the printable parts of the Libre diabetica replica (FDM).
 
-    cap   white, 'diabetica' pressed into the face, screws onto the base (3-start
+    cap   white, smooth face, 'diabetica' pressed into the side, screws onto the base (3-start
           thread, a third of a turn), so fronts can be swapped
     base  clear, ribbed like a Libre, sits on the outside of the sleeve
     ring  split clip ring inside the shirt, snaps into the base through the fabric
@@ -90,9 +90,10 @@ BOSS_TOP = 3.8
 CAP_TOP, CAP_EDGE = 5.0, 0.8
 SOCKET_TOP = 4.0      # 0.2 mm over the boss
 
-# brand name pressed into the cap face; the face prints on the bed, so FDM draws the
-# letters crisp. Bold sans, strokes ~0.5 mm for a 0.4 mm nozzle; can be filled with paint
-TEXT, TEXT_WIDTH, TEXT_DEPTH = "diabetica", 22.0, 0.4
+# brand name pressed into the side of the cap, where the original model had it:
+# centred on +X, on the straight part of the side wall; the face stays smooth
+TEXT, TEXT_HEIGHT, TEXT_DEPTH = "diabetica", 1.2, 0.3
+TEXT_Z = (BASE_TOP + 0.2 + CAP_TOP - CAP_EDGE) / 2       # middle of the straight side
 
 
 
@@ -190,11 +191,18 @@ def text_part():
     polys = [np.asarray(p) for p in path.to_polygons(closed_only=True)]
     pts = np.vstack(polys)
     lo, hi = pts.min(0), pts.max(0)
-    k = TEXT_WIDTH / (hi[0] - lo[0])
+    k = TEXT_HEIGHT / (hi[1] - lo[1])
     centre = (lo + hi) / 2
     shapes = [[tuple((q - centre) * k) for q in poly[:-1]] for poly in polys]
-    letters = CrossSection(shapes, FillRule.EvenOdd)
-    return Manifold.extrude(letters, TEXT_DEPTH + 0.1).translate([0, 0, CAP_TOP - TEXT_DEPTH])
+    flat = Manifold.extrude(CrossSection(shapes, FillRule.EvenOdd), TEXT_DEPTH + 0.2, n_divisions=1)
+
+    def wrap(v):                                 # flat letters (x along, y up, z inward) onto the side wall
+        v = np.array(v, dtype=np.float64)
+        a = v[:, 0] / R_OUT
+        r = R_OUT + 0.2 - v[:, 2]
+        return np.c_[r * np.cos(a), r * np.sin(a), TEXT_Z + v[:, 1]]
+
+    return flat.refine_to_length(0.3).warp_batch(wrap)
 
 
 
@@ -389,9 +397,10 @@ def check(body, ring, cap, lock):
     line("  thread holds by friction", f"lead angle {lead_angle:.1f}°", lead_angle < 5)
     line("  cap face over the thread", f"{CAP_TOP - SOCKET_TOP:.2f} mm", CAP_TOP - SOCKET_TOP >= 0.8)
     text = text_part()
-    lo, hi = text.bounding_box()[:2], text.bounding_box()[3:5]
-    line(f"  '{TEXT}' on the face", f"{hi[0] - lo[0]:.1f} x {hi[1] - lo[1]:.1f} mm, {TEXT_DEPTH} deep, "
-         f"{CAP_TOP - TEXT_DEPTH - SOCKET_TOP:.1f} mm left over the thread", CAP_TOP - TEXT_DEPTH - SOCKET_TOP >= 0.5)
+    bb = text.bounding_box()
+    wall = R_OUT - TEXT_DEPTH - THREAD_CREST - THREAD_CLR
+    line(f"  '{TEXT}' on the side", f"{bb[5] - bb[2]:.1f} mm tall, {TEXT_DEPTH} deep, z {bb[2]:.1f}-{bb[5]:.1f}, "
+         f"{wall:.1f} mm of wall behind it", wall >= 2.0 and bb[2] >= BASE_TOP + 0.2 and bb[5] <= CAP_TOP - CAP_EDGE)
     return ok
 
 
