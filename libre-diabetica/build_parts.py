@@ -66,6 +66,14 @@ TAB_BAND, TAB_SLOT, TAB_DEG = 1.2, 0.8, 60.0
 LOCK_HOOK_R, LOCK_HOOK_Z = 11.25, (-1.2, -1.0)
 CLICK_NFC_TAG, CLICK_NFC_POCKET = 10.0, 10.2
 
+# steel circlip (third variant): a standard internal retaining ring for a 22 mm bore
+# (DIN 472 22x1.0) clicks into a groove in the middle of the plastic ring and keeps it
+# from shrinking. The ring gets a 1.2 mm deeper hub for the groove. Steel would deaden
+# an NFC sticker next to it, so the Ø20 sticker moves up into the top of the base
+CIRCLIP_BORE, CIRCLIP_GROOVE_D, CIRCLIP_GROOVE_W, CIRCLIP_S = 22.0, 23.0, 1.1, 1.0
+HUB_R, HUB_DROP = 12.6, 1.2
+BASE_NFC_POCKET, BASE_NFC_DEPTH = 10.2, 0.4
+
 # lock disc: fills the middle of the ring so the ring cannot shrink any more
 LOCK_R = 10.55        # a hair under the ring's hole with the thickest fabric
 PIN_R, PIN_D, PIN_N = 9.3, 1.6, 4
@@ -216,13 +224,24 @@ def ring_geometry():
     return fo, fi, bo, hook_z, top
 
 
-def ring_part():
+def ring_part(inner="click"):
     fo, fi, bo, hook_z, top = ring_geometry()
     bot, flange_top = -FABRIC - FLANGE_T, -FABRIC
     tip_z = hook_z - SLOPE * HOOK + 0.08
     gz0, gz1, gd = LOCK_GROOVE
-    profile = [
-        (FLANGE_IN + 0.3, bot), (FLANGE_OUT - 0.5, bot), (FLANGE_OUT, bot + 0.5),
+    if inner == "circlip":                                  # deeper hub with a DIN 472 groove in the bore
+        hub = bot - HUB_DROP
+        c0 = hub + 0.45
+        c1 = c0 + CIRCLIP_GROOVE_W
+        start = [(HUB_R, bot)]
+        bore = [(FLANGE_IN, c1), (CIRCLIP_GROOVE_D / 2, c1), (CIRCLIP_GROOVE_D / 2, c0), (FLANGE_IN, c0),
+                (FLANGE_IN, hub + 0.2), (FLANGE_IN + 0.2, hub), (HUB_R - 0.4, hub), (HUB_R, hub + 0.4)]
+    else:
+        start = [(FLANGE_IN + 0.3, bot)]
+        bore = [(FLANGE_IN, gz1), (FLANGE_IN + gd, gz1), (FLANGE_IN + gd, gz0), (FLANGE_IN, gz0),   # for the click lock
+                (FLANGE_IN, bot + 0.3)]
+    profile = start + [
+        (FLANGE_OUT - 0.5, bot), (FLANGE_OUT, bot + 0.5),
         (FLANGE_OUT, flange_top - 0.2), (FLANGE_OUT - 0.2, flange_top),
         (fo + 0.25, flange_top), (fo, flange_top + 0.25),
         (fo, hook_z), (bo, hook_z - SLOPE * HOOK),     # hook face, same undercut as the lip
@@ -230,11 +249,9 @@ def ring_part():
         (fi + 0.3, top), (fi, top - 0.3),
         (fi, flange_top + 0.2), (fi - 0.2, flange_top),
         (FLANGE_IN + 0.2, flange_top), (FLANGE_IN, flange_top - 0.2),
-        (FLANGE_IN, gz1), (FLANGE_IN + gd, gz1), (FLANGE_IN + gd, gz0), (FLANGE_IN, gz0),   # for the click lock
-        (FLANGE_IN, bot + 0.3),
-    ]
+    ] + bore
     ring = revolve(profile, degrees=360.0 - GAP_DEG)
-    return ring.rotate([0, 0, 180.0 + GAP_DEG / 2])   # gap faces +X
+    return ring.rotate([0, 0, 180.0 + GAP_DEG / 2])   # gap faces -X
 
 
 def lock_part():
@@ -264,6 +281,28 @@ def lock_click_part():
 
 def tag_click_part():
     return Manifold.cylinder(NFC_T, CLICK_NFC_TAG, CLICK_NFC_TAG, 128).translate([0, 0, -FABRIC - NFC_ROOM])
+
+
+def circlip_part():
+    """DIN 472 22x1.0 sitting in the hub groove, ears inward (for the viewer)."""
+    c0 = -FABRIC - FLANGE_T - HUB_DROP + 0.45 + 0.05
+    gap = 46.0
+    band = revolve([(9.7, c0), (CIRCLIP_GROOVE_D / 2 - 0.05, c0), (CIRCLIP_GROOVE_D / 2 - 0.05, c0 + CIRCLIP_S),
+                    (9.7, c0 + CIRCLIP_S)], degrees=360.0 - gap).rotate([0, 0, gap / 2])
+    for sgn in (1, -1):
+        a = math.radians(sgn * (gap / 2 + 7))
+        ear = Manifold.cylinder(CIRCLIP_S, 1.7, 1.7, 48) - Manifold.cylinder(CIRCLIP_S, 0.75, 0.75, 32)
+        band += ear.translate([9.3 * math.cos(a), 9.3 * math.sin(a), c0])
+    return band                                   # its cut sits opposite the plastic ring's cut, so it spans it
+
+
+def base_circlip_part():
+    pocket = Manifold.cylinder(BASE_NFC_DEPTH + 0.5, BASE_NFC_POCKET, BASE_NFC_POCKET, 128)
+    return body_click_part() - pocket.translate([0, 0, BOSS_TOP - BASE_NFC_DEPTH])
+
+
+def tag_circlip_part():
+    return Manifold.cylinder(NFC_T, CLICK_NFC_TAG, CLICK_NFC_TAG, 128).translate([0, 0, BOSS_TOP - BASE_NFC_DEPTH + 0.02])
 
 
 def lock_melted():
@@ -372,6 +411,16 @@ def check(body, ring, cap, lock):
              "ok", grip >= 0.25 and bend <= 1.0 and strain < 0.02)
     line("  NFC Ø20 pocket rim", f"{LOCK_R - CLICK_NFC_POCKET:.2f} mm", LOCK_R - CLICK_NFC_POCKET >= 0.3)
 
+    print("  steel circlip (variant 3):")
+    ring_s = ring_part("circlip")
+    line("  ring with hub watertight", ring_s.status().name, ring_s.status().name == "NoError")
+    line("  groove matches DIN 472 for a 22 mm bore", f"bore {2 * FLANGE_IN:.1f}, groove Ø{CIRCLIP_GROOVE_D:.1f} x {CIRCLIP_GROOVE_W} for a {CIRCLIP_S} mm ring",
+         abs(2 * FLANGE_IN - CIRCLIP_BORE) < 0.01 and CIRCLIP_GROOVE_W > CIRCLIP_S)
+    clash = (ring_s ^ body_click_part()).volume()
+    line("  hub stays clear of the base", f"{clash:.4f} mm3", clash < 1e-3)
+    line("  NFC pocket in the base top", f"Ø{2 * BASE_NFC_POCKET:.1f}, {THREAD_ROOT - BASE_NFC_POCKET:.1f} mm wall to the thread",
+         THREAD_ROOT - BASE_NFC_POCKET >= 2.0 and BOSS_TOP - BASE_NFC_DEPTH > GROOVE_TOP + 0.6)
+
     print("  NFC sealed in the lock:")
     cover = FLANGE_T - NFC_FLOOR - NFC_ROOM
     line("  plastic under / over the sticker", f"{NFC_FLOOR:.1f} / {cover:.1f} mm", NFC_FLOOR >= 0.399 and cover >= 0.399)
@@ -439,7 +488,9 @@ def main():
     body_c, lock_c = body_click_part(), lock_click_part()
     shown = {"cap": cap, "body": body, "ring": ring, "lock": lock_melted(), "lock_print": lock,
              "tag": tag_part(),
-             "body_click": body_c, "lock_click": lock_c, "tag_click": tag_click_part()}
+             "body_click": body_c, "lock_click": lock_c, "tag_click": tag_click_part(),
+             "body_circlip": base_circlip_part(), "ring_circlip": ring_part("circlip"),
+             "circlip": circlip_part(), "tag_circlip": tag_circlip_part()}
     data = {k: packed(*as_arrays(p)) for k, p in shown.items()}
     data["fit"] = {"fabric": FABRIC, "preload": PRELOAD, "hook": HOOK, "gap_deg": GAP_DEG,
                    "lead": THREAD_LEAD, "turn": 360.0 * (BOSS_TOP - BASE_TOP) / THREAD_LEAD, "nfc_pause": NFC_PAUSE}
@@ -453,8 +504,11 @@ def main():
     for old in STL_DIR.rglob("*.stl"):
         old.unlink()
     (STL_DIR / "click").mkdir(exist_ok=True)
+    (STL_DIR / "circlip").mkdir(exist_ok=True)
     for name, part, flip in (("1_cap", cap, True), ("2_base", body, False), ("3_ring", ring, False), ("4_lock", lock, False),
-                             ("click/libre_2_base_click", body_c, False), ("click/libre_4_lock_click", lock_c, False)):
+                             ("click/libre_2_base_click", body_c, False), ("click/libre_4_lock_click", lock_c, False),
+                             ("circlip/libre_2_base_circlip", shown["body_circlip"], False),
+                             ("circlip/libre_3_ring_circlip", shown["ring_circlip"], False)):
         path = STL_DIR / (f"{name}.stl" if "/" in name else f"libre_{name}.stl")
         write_stl(path, *as_arrays(part), face_down=flip)
         print(f"  {path.relative_to(HERE)}: {part.volume() / 1000:.2f} cm3, ~{part.volume() / 1000 * 1.27:.1f} g")
